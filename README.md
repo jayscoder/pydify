@@ -1,9 +1,10 @@
 # Pydify
 
-Pydify 是一个用于与 Dify API 交互的 Python 客户端库。它提供了两个主要的客户端类：
+Pydify 是一个用于与 Dify API 和 Sandan API 交互的 Python 客户端库。它提供了三个主要的客户端类：
 
 - `DifyClient`：用于与原始 Dify API 交互
 - `DifyChatClient`：用于与聊天 API 交互，支持标准的对话模型应用
+- `SandanClient`：用于与 sandanapp.com 文本生成应用 API 交互
 
 ## 安装
 
@@ -34,6 +35,16 @@ pip install pydify
 - 会话管理（获取列表、获取历史消息、删除会话、重命名）
 - 语音转文字、文字转语音
 - 获取应用信息、参数和元信息
+
+### SandanClient 主要功能：
+
+- 发送文本生成消息（阻塞模式和流式模式）
+- 异步发送文本生成消息
+- 文件上传（主要支持图片）
+- 停止文本生成响应
+- 消息反馈（点赞/点踩）
+- 文字转语音
+- 获取应用信息和参数
 
 ## 基本用法
 
@@ -111,29 +122,90 @@ result = chat_client.send_chat_message(
 )
 ```
 
-### 异步用法
+### 使用 SandanClient
 
 ```python
+from pydify import SandanClient, ResponseMode, MessageRating
+
+# 初始化客户端
+api_key = "your_api_key_here"
+client = SandanClient(api_key)  # 默认 base_url 为 "http://sandanapp.com/v1"
+
+# 阻塞模式发送消息
+response = client.send_completion_message(
+    query="你好，请介绍一下自己",
+    response_mode=ResponseMode.BLOCKING,
+    user="user_123"
+)
+print("回答:", response["answer"])
+
+# 流式模式发送消息
+events = client.send_completion_message(
+    query="给我讲个故事",
+    response_mode=ResponseMode.STREAMING,
+    user="user_123"
+)
+
+# 处理流式响应
+for event in events:
+    if "event" in event:
+        if event["event"] == "message":
+            print(f"回复片段: {event['answer']}", end="", flush=True)
+        elif event["event"] == "message_end":
+            print("\n消息结束，元数据:", event.get("metadata", {}))
+            if "usage" in event:
+                print(f"模型用量: {event['usage']}")
+    elif "answer" in event:
+        print(f"{event['answer']}", end="", flush=True)
+
+# 上传文件
+result = client.upload_file("path/to/image.jpg", "user_123")
+file_id = result["id"]
+
+# 使用上传的图片发送消息
+file_input = client.create_file_input(file_id)
+response = client.send_completion_message(
+    query="请描述这张图片",
+    files=[file_input],
+    response_mode=ResponseMode.BLOCKING,
+    user="user_123"
+)
+print(f"回答: {response['answer']}")
+
+# 发送消息反馈
+client.send_message_feedback(
+    message_id="message_id_123",
+    rating=MessageRating.LIKE,
+    user="user_123",
+    content="很好的回答！"
+)
+
+# 文字转语音
+audio_data = client.text_to_audio(
+    text="这是一段测试文本",
+    user="user_123"
+)
+# 保存音频数据
+with open("output.mp3", "wb") as f:
+    f.write(audio_data)
+
+# 异步使用
 import asyncio
-from pydify import DifyClient, DifyChatClient, ResponseMode
 
 async def run_async_example():
-    api_key = "your_api_key_here"
-    client = DifyChatClient(api_key)
-
-    # 定义回调函数
     async def event_callback(event_data):
-        print(f"收到事件: {event_data.get('event', 'unknown')}")
+        if "event" in event_data:
+            if event_data["event"] == "message":
+                print(f"回复片段: {event_data['answer']}", end="", flush=True)
+            elif event_data["event"] == "message_end":
+                print("\n消息结束")
+        elif "answer" in event_data:
+            print(f"{event_data['answer']}", end="", flush=True)
 
-        if event_data.get('event') == 'message_end':
-            print("聊天结束:", event_data)
-
-    # 异步发送聊天消息
-    await client.send_chat_message_async(
+    await client.send_completion_message_async(
         query="异步测试消息",
-        response_mode=ResponseMode.STREAMING,
-        user="async_user_123",
-        callback=event_callback
+        callback=event_callback,
+        user="async_user_123"
     )
 
     # 异步上传文件

@@ -46,10 +46,19 @@ class MessageRating(Enum):
 
 class DifyApiError(Exception):
     """Dify API 错误类"""
-    def __init__(self, status_code: int, message: str):
+    def __init__(self, status_code: int, message: str, code: str = None):
         self.status_code = status_code
         self.message = message
-        super().__init__(f"Dify API 错误 (状态码: {status_code}): {message}")
+        self.code = code
+        super().__init__(f"API错误 {status_code}: {message}" + (f", 错误码: {code}" if code else ""))
+
+class SandanApiError(Exception):
+    """Sandan API 错误类"""
+    def __init__(self, status_code: int, message: str, code: str = None):
+        self.status_code = status_code
+        self.message = message
+        self.code = code
+        super().__init__(f"API错误 {status_code}: {message}" + (f", 错误码: {code}" if code else ""))
 
 class DifyClient:
     """Dify API 客户端类"""
@@ -93,16 +102,19 @@ class DifyClient:
                 return {"status": "success"}
         
         error_message = "未知错误"
+        error_code = None
         try:
             error_data = response.json()
             if "error" in error_data:
                 error_message = error_data["error"]
             elif "message" in error_data:
                 error_message = error_data["message"]
+            if "code" in error_data:
+                error_code = error_data["code"]
         except Exception:
             error_message = response.text or "无法解析错误信息"
         
-        raise DifyApiError(response.status_code, error_message)
+        raise DifyApiError(response.status_code, error_message, error_code)
     
     def run_workflow(
         self, 
@@ -556,16 +568,19 @@ class DifyChatClient:
                 return {"status": "success"}
         
         error_message = "未知错误"
+        error_code = None
         try:
             error_data = response.json()
             if "error" in error_data:
                 error_message = error_data["error"]
             elif "message" in error_data:
                 error_message = error_data["message"]
+            if "code" in error_data:
+                error_code = error_data["code"]
         except Exception:
             error_message = response.text or "无法解析错误信息"
         
-        raise DifyApiError(response.status_code, error_message)
+        raise DifyApiError(response.status_code, error_message, error_code)
 
     def send_chat_message(
         self,
@@ -818,25 +833,28 @@ class DifyChatClient:
         
         logger.info(f"异步上传文件: {file_path}, MIME类型: {mime_type}, 用户: {user}")
         
-        # 准备表单数据
-        data = aiohttp.FormData()
-        data.add_field('user', user)
-        
-        # 添加文件
+        # 读取文件内容
         with open(file_path, 'rb') as f:
-            data.add_field('file', 
-                          f, 
-                          filename=file_path.name, 
-                          content_type=mime_type)
-            
-            async with aiohttp.ClientSession() as session:
-                async with session.post(url, headers=headers, data=data) as response:
-                    if response.status != 200:
-                        text = await response.text()
-                        raise DifyApiError(response.status, text)
-                    
-                    result = await response.json()
-                    return result
+            file_data = f.read()
+        
+        # 准备表单数据
+        form_data = aiohttp.FormData()
+        form_data.add_field('file', file_data, filename=file_path.name, content_type=mime_type)
+        form_data.add_field('user', user)
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, data=form_data) as response:
+                if response.status != 200:
+                    text = await response.text()
+                    try:
+                        error_data = json.loads(text)
+                        error_message = error_data.get("message", "未知错误")
+                        error_code = error_data.get("code")
+                        raise SandanApiError(response.status, error_message, error_code)
+                    except json.JSONDecodeError:
+                        raise SandanApiError(response.status, text or "未知错误")
+                
+                return await response.json()
     
     def stop_chat_response(self, task_id: str, user: str) -> Dict:
         """
@@ -1171,8 +1189,8 @@ class DifyChatClient:
         
         Args:
             file_id (str): 文件ID
-            file_type (str, optional): 文件类型，默认为image
-            transfer_method (str, optional): 传输方式，默认为local_file
+            file_type (str, optional): 文件类型，默认为"image"
+            transfer_method (str, optional): 传输方式，默认为"local_file"
             
         Returns:
             Dict: 文件输入参数
@@ -1194,8 +1212,8 @@ class DifyChatClient:
         
         Args:
             url (str): 文件URL
-            file_type (str, optional): 文件类型，默认为image
-            transfer_method (str, optional): 传输方式，默认为remote_url
+            file_type (str, optional): 文件类型，默认为"image"
+            transfer_method (str, optional): 传输方式，默认为"remote_url"
             
         Returns:
             Dict: URL输入参数
@@ -1206,148 +1224,599 @@ class DifyChatClient:
             "url": url
         }
 
-# 导出类
-__all__ = ['DifyClient', 'DifyChatClient', 'ResponseMode', 'FileType', 'TransferMethod', 
-           'MessageRating', 'DifyApiError']
-
-# 使用示例
-if __name__ == "__main__":
-    # 示例 1：阻塞模式运行工作流
-    def example_blocking():
-        api_key = "your_api_key_here"
-        client = DifyClient(api_key, "https://api.dify.ai/v1")
+class SandanClient:
+    """Sandan 文本生成应用 API 客户端类"""
+    
+    def __init__(self, api_key: str, base_url: str = "http://sandanapp.com/v1"):
+        """
+        初始化 Sandan 文本生成应用客户端
         
-        # 简单工作流
-        result = client.run_workflow(
-            inputs={"query": "你好，请介绍一下自己"},
-            response_mode=ResponseMode.BLOCKING,
-            user="test_user_123"
-        )
-        print("阻塞模式运行结果:", result)
+        Args:
+            api_key (str): API密钥
+            base_url (str, optional): API基础URL, 默认为"http://sandanapp.com/v1"
+        """
+        self.api_key = api_key
+        self.base_url = base_url.rstrip("/")  # 移除结尾的斜杠以确保URL格式一致
+        self.headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        logger.info(f"初始化 Sandan 文本生成应用客户端，基础URL: {self.base_url}")
+    
+    def _handle_response(self, response: requests.Response) -> Dict:
+        """
+        处理API响应，检查错误
         
-    # 示例 2：流式模式运行工作流
-    def example_streaming():
-        api_key = "your_api_key_here"
-        client = DifyClient(api_key, "https://api.dify.ai/v1")
-        
-        # 流式响应
-        stream = client.run_workflow(
-            inputs={"query": "给我讲个故事"},
-            response_mode=ResponseMode.STREAMING,
-            user="test_user_123"
-        )
-        
-        # 打印每个事件
-        for line in stream:
-            if line.startswith('data: '):
-                data = line[6:]  # 移除 'data: ' 前缀
+        Args:
+            response (requests.Response): API响应对象
+            
+        Returns:
+            Dict: 响应JSON数据
+            
+        Raises:
+            SandanApiError: 如果API返回错误
+        """
+        if 200 <= response.status_code < 300:
+            if response.content:
                 try:
-                    event_data = json.loads(data)
-                    print(f"事件: {event_data.get('event', 'unknown')}")
-                    if event_data.get('event') == 'workflow_finished':
-                        print("工作流执行完成:", event_data)
+                    return response.json()
                 except json.JSONDecodeError:
-                    print(f"解析事件数据失败: {data}")
-    
-    # 示例 3：上传文件并在工作流中使用
-    def example_file_upload():
-        api_key = "your_api_key_here"
-        client = DifyClient(api_key, "https://api.dify.ai/v1")
+                    return {"status": "success", "data": response.text}
+            else:
+                return {"status": "success"}
         
-        # 上传文件
-        file_result = client.upload_file(
-            file_path="example.txt",
-            user="test_user_123",
-            file_type="TXT"
-        )
+        error_message = "未知错误"
+        error_code = None
+        try:
+            error_data = response.json()
+            if "error" in error_data:
+                error_message = error_data["error"]
+            elif "message" in error_data:
+                error_message = error_data["message"]
+            if "code" in error_data:
+                error_code = error_data["code"]
+        except Exception:
+            error_message = response.text or "无法解析错误信息"
         
-        file_id = file_result.get("id")
+        raise SandanApiError(response.status_code, error_message, error_code)
+
+    def send_completion_message(
+        self,
+        query: str,
+        inputs: Dict[str, Any] = None,
+        response_mode: ResponseMode = ResponseMode.BLOCKING,
+        user: str = "user",
+        files: List[Dict] = None
+    ) -> Union[Dict, Generator]:
+        """
+        发送文本生成消息
         
-        # 在工作流中使用文件
-        result = client.run_workflow(
-            inputs={
-                "document": client.create_file_input(file_id)
-            },
-            response_mode=ResponseMode.BLOCKING,
-            user="test_user_123"
-        )
-        
-        print("文件处理结果:", result)
-    
-    # 示例 4：异步运行工作流
-    async def example_async():
-        api_key = "your_api_key_here"
-        client = DifyClient(api_key, "https://api.dify.ai/v1")
-        
-        # 定义回调函数
-        async def event_callback(event_data):
-            print(f"收到事件: {event_data.get('event', 'unknown')}")
+        Args:
+            query (str): 用户输入/提问内容
+            inputs (Dict[str, Any], optional): 允许传入应用定义的各变量值
+            response_mode (ResponseMode, optional): 响应模式，默认为阻塞模式
+            user (str, optional): 用户标识
+            files (List[Dict], optional): 上传的文件列表
             
-            if event_data.get('event') == 'workflow_finished':
-                print("工作流执行完成:", event_data)
+        Returns:
+            Union[Dict, Generator]: 阻塞模式返回结果字典，流式模式返回事件生成器
+        """
+        url = f"{self.base_url}/completion-messages"
         
-        # 异步运行工作流
-        await client.run_workflow_async(
-            inputs={"query": "异步测试消息"},
-            response_mode=ResponseMode.STREAMING,
-            user="async_user_123",
-            callback=event_callback
-        )
-    
-    # 示例 5：使用聊天客户端发送消息
-    def example_chat():
-        api_key = "your_api_key_here"
-        client = DifyChatClient(api_key, "http://sandanapp.com/v1")
+        if inputs is None:
+            inputs = {"query": query}
+        else:
+            inputs["query"] = query
         
-        # 发送聊天消息（阻塞模式）
-        result = client.send_chat_message(
-            query="你好，请介绍一下自己",
-            response_mode=ResponseMode.BLOCKING,
-            user="chat_user_123"
-        )
-        print("聊天响应:", result)
+        data = {
+            "inputs": inputs,
+            "response_mode": response_mode.value,
+            "user": user
+        }
         
-        # 发送聊天消息（流式模式）
-        stream = client.send_chat_message(
-            query="给我讲个故事",
-            response_mode=ResponseMode.STREAMING,
-            user="chat_user_123"
-        )
+        if files:
+            data["files"] = files
         
-        for event in stream:
-            print(f"事件: {event.get('event', 'unknown')}")
-            if event.get('event') == 'message_end':
-                print("聊天结束:", event)
-    
-    # 示例 6：获取会话列表
-    def example_get_conversations():
-        api_key = "your_api_key_here"
-        client = DifyChatClient(api_key, "http://sandanapp.com/v1")
+        logger.info(f"发送文本生成消息，用户: {user}, 响应模式: {response_mode.value}")
         
-        # 获取会话列表
-        conversations = client.get_conversations(
-            user="chat_user_123",
-            limit=10
-        )
-        
-        print("会话列表:", conversations)
-        
-        # 如果有会话，获取第一个会话的消息历史
-        if conversations.get('data') and len(conversations['data']) > 0:
-            conversation_id = conversations['data'][0]['id']
+        if response_mode == ResponseMode.BLOCKING:
+            response = requests.post(url, headers=self.headers, json=data)
+            return self._handle_response(response)
+        else:
+            # 流式模式
+            response = requests.post(url, headers=self.headers, json=data, stream=True)
             
-            messages = client.get_conversation_messages(
-                conversation_id=conversation_id,
-                user="chat_user_123",
-                limit=5
-            )
+            if response.status_code != 200:
+                self._handle_response(response)  # 出错时会抛出异常
             
-            print(f"会话 {conversation_id} 的消息:", messages)
+            def generate_events():
+                for line in response.iter_lines(decode_unicode=True):
+                    if line.startswith('data: '):
+                        data = line[6:]  # 移除 'data: ' 前缀
+                        try:
+                            event_data = json.loads(data)
+                            yield event_data
+                        except json.JSONDecodeError:
+                            logger.error(f"解析事件数据失败: {data}")
+            
+            return generate_events()
     
-    # 运行示例
-    # example_blocking()
-    # example_streaming()
-    # example_file_upload()
-    # asyncio.run(example_async())
-    # example_chat()
-    # example_get_conversations()
+    async def send_completion_message_async(
+        self,
+        query: str,
+        inputs: Dict[str, Any] = None,
+        response_mode: ResponseMode = ResponseMode.STREAMING,
+        user: str = "user",
+        files: List[Dict] = None,
+        callback: Callable = None
+    ) -> Union[Dict, None]:
+        """
+        异步发送文本生成消息
+        
+        Args:
+            query (str): 用户输入/提问内容
+            inputs (Dict[str, Any], optional): 允许传入应用定义的各变量值
+            response_mode (ResponseMode, optional): 响应模式，默认为流式模式
+            user (str, optional): 用户标识
+            files (List[Dict], optional): 上传的文件列表
+            callback (Callable, optional): 事件回调函数
+            
+        Returns:
+            Union[Dict, None]: 阻塞模式返回结果字典，流式模式返回None
+        """
+        url = f"{self.base_url}/completion-messages"
+        
+        if inputs is None:
+            inputs = {"query": query}
+        else:
+            inputs["query"] = query
+        
+        data = {
+            "inputs": inputs,
+            "response_mode": response_mode.value,
+            "user": user
+        }
+        
+        if files:
+            data["files"] = files
+        
+        logger.info(f"异步发送文本生成消息，用户: {user}, 响应模式: {response_mode.value}")
+        
+        async with aiohttp.ClientSession() as session:
+            if response_mode == ResponseMode.BLOCKING:
+                async with session.post(url, headers=self.headers, json=data) as response:
+                    if response.status != 200:
+                        text = await response.text()
+                        try:
+                            error_data = json.loads(text)
+                            error_message = error_data.get("message", "未知错误")
+                            error_code = error_data.get("code")
+                            raise SandanApiError(response.status, error_message, error_code)
+                        except json.JSONDecodeError:
+                            raise SandanApiError(response.status, text or "未知错误")
+                    
+                    return await response.json()
+            else:
+                # 流式模式
+                async with session.post(url, headers=self.headers, json=data) as response:
+                    if response.status != 200:
+                        text = await response.text()
+                        try:
+                            error_data = json.loads(text)
+                            error_message = error_data.get("message", "未知错误")
+                            error_code = error_data.get("code")
+                            raise SandanApiError(response.status, error_message, error_code)
+                        except json.JSONDecodeError:
+                            raise SandanApiError(response.status, text or "未知错误")
+                    
+                    # 处理SSE流
+                    buffer = ""
+                    async for line in response.content:
+                        line = line.decode('utf-8')
+                        buffer += line
+                        
+                        if buffer.endswith('\n\n'):
+                            for message in buffer.strip().split('\n\n'):
+                                if message.startswith('data: '):
+                                    data = message[6:]  # 移除 'data: ' 前缀
+                                    try:
+                                        event_data = json.loads(data)
+                                        if callback:
+                                            await callback(event_data)
+                                    except json.JSONDecodeError:
+                                        logger.error(f"解析事件数据失败: {data}")
+                            buffer = ""
+                    
+                    # 处理剩余数据
+                    if buffer:
+                        for message in buffer.strip().split('\n\n'):
+                            if message.startswith('data: '):
+                                data = message[6:]  # 移除 'data: ' 前缀
+                                try:
+                                    event_data = json.loads(data)
+                                    if callback:
+                                        await callback(event_data)
+                                except json.JSONDecodeError:
+                                    logger.error(f"解析事件数据失败: {data}")
+                    
+                    return None
+    
+    def upload_file(self, file_path: str, user: str) -> Dict:
+        """
+        上传文件
+        
+        Args:
+            file_path (str): 文件路径
+            user (str): 用户标识
+            
+        Returns:
+            Dict: 上传结果，包含文件ID和其他信息
+        """
+        url = f"{self.base_url}/files/upload"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}"
+            # 注意：不要设置 Content-Type，requests 会自动设置正确的 multipart/form-data
+        }
+        
+        file_path = Path(file_path)
+        if not file_path.exists():
+            raise FileNotFoundError(f"文件不存在: {file_path}")
+        
+        # 获取MIME类型
+        mime_type, _ = mimetypes.guess_type(str(file_path))
+        if not mime_type:
+            mime_type = 'application/octet-stream'
+        
+        logger.info(f"上传文件: {file_path}, MIME类型: {mime_type}, 用户: {user}")
+        
+        # 准备表单数据
+        with open(file_path, 'rb') as f:
+            files = {
+                'file': (file_path.name, f, mime_type)
+            }
+            data = {
+                'user': user
+            }
+            
+            response = requests.post(url, headers=headers, files=files, data=data)
+            return self._handle_response(response)
+    
+    def upload_file_content(self, file_content: BinaryIO, filename: str, user: str, mime_type: str = None) -> Dict:
+        """
+        上传文件内容
+        
+        Args:
+            file_content (BinaryIO): 文件内容
+            filename (str): 文件名
+            user (str): 用户标识
+            mime_type (str, optional): MIME类型
+            
+        Returns:
+            Dict: 上传结果，包含文件ID和其他信息
+        """
+        url = f"{self.base_url}/files/upload"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}"
+            # 注意：不要设置 Content-Type，requests 会自动设置正确的 multipart/form-data
+        }
+        
+        # 如果未提供MIME类型，则从文件名猜测
+        if not mime_type:
+            mime_type, _ = mimetypes.guess_type(filename)
+            if not mime_type:
+                mime_type = 'application/octet-stream'
+        
+        logger.info(f"上传文件内容: {filename}, MIME类型: {mime_type}, 用户: {user}")
+        
+        # 准备表单数据
+        files = {
+            'file': (filename, file_content, mime_type)
+        }
+        data = {
+            'user': user
+        }
+        
+        response = requests.post(url, headers=headers, files=files, data=data)
+        return self._handle_response(response)
+    
+    async def upload_file_async(self, file_path: str, user: str) -> Dict:
+        """
+        异步上传文件
+        
+        Args:
+            file_path (str): 文件路径
+            user (str): 用户标识
+            
+        Returns:
+            Dict: 上传结果，包含文件ID和其他信息
+        """
+        url = f"{self.base_url}/files/upload"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}"
+            # 注意：不要设置 Content-Type，aiohttp 会自动设置正确的 multipart/form-data
+        }
+        
+        file_path = Path(file_path)
+        if not file_path.exists():
+            raise FileNotFoundError(f"文件不存在: {file_path}")
+        
+        # 获取MIME类型
+        mime_type, _ = mimetypes.guess_type(str(file_path))
+        if not mime_type:
+            mime_type = 'application/octet-stream'
+        
+        logger.info(f"异步上传文件: {file_path}, MIME类型: {mime_type}, 用户: {user}")
+        
+        # 读取文件内容
+        with open(file_path, 'rb') as f:
+            file_data = f.read()
+        
+        # 准备表单数据
+        form_data = aiohttp.FormData()
+        form_data.add_field('file', file_data, filename=file_path.name, content_type=mime_type)
+        form_data.add_field('user', user)
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, data=form_data) as response:
+                if response.status != 200:
+                    text = await response.text()
+                    try:
+                        error_data = json.loads(text)
+                        error_message = error_data.get("message", "未知错误")
+                        error_code = error_data.get("code")
+                        raise SandanApiError(response.status, error_message, error_code)
+                    except json.JSONDecodeError:
+                        raise SandanApiError(response.status, text or "未知错误")
+                
+                return await response.json()
+    
+    def stop_completion_response(self, task_id: str, user: str) -> Dict:
+        """
+        停止文本生成响应
+        
+        Args:
+            task_id (str): 任务ID
+            user (str): 用户标识
+            
+        Returns:
+            Dict: 停止结果
+        """
+        url = f"{self.base_url}/completion-messages/{task_id}/stop"
+        
+        data = {
+            "user": user
+        }
+        
+        logger.info(f"停止文本生成响应: {task_id}, 用户: {user}")
+        
+        response = requests.post(url, headers=self.headers, json=data)
+        return self._handle_response(response)
+    
+    def send_message_feedback(
+        self, 
+        message_id: str, 
+        rating: MessageRating, 
+        user: str,
+        content: str = None
+    ) -> Dict:
+        """
+        发送消息反馈
+        
+        Args:
+            message_id (str): 消息ID
+            rating (MessageRating): 评分（点赞/点踩/取消）
+            user (str): 用户标识
+            content (str, optional): 反馈内容
+            
+        Returns:
+            Dict: 反馈结果
+        """
+        url = f"{self.base_url}/messages/{message_id}/feedbacks"
+        
+        data = {
+            "rating": rating.value,
+            "user": user
+        }
+        
+        if content:
+            data["content"] = content
+        
+        logger.info(f"发送消息反馈: {message_id}, 评分: {rating.value}, 用户: {user}")
+        
+        response = requests.post(url, headers=self.headers, json=data)
+        return self._handle_response(response)
+    
+    def text_to_audio(self, text: str = None, user: str = "user", message_id: str = None) -> bytes:
+        """
+        文字转语音
+        
+        Args:
+            text (str, optional): 文本内容
+            user (str, optional): 用户标识
+            message_id (str, optional): 消息ID，优先使用
+            
+        Returns:
+            bytes: 音频数据
+        """
+        url = f"{self.base_url}/text-to-audio"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            'user': user
+        }
+        
+        if message_id:
+            data['message_id'] = message_id
+        elif text:
+            data['text'] = text
+        else:
+            raise ValueError("必须提供 text 或 message_id 参数")
+        
+        logger.info(f"文字转语音, 用户: {user}")
+        
+        response = requests.post(url, headers=headers, json=data)
+        
+        if response.status_code != 200:
+            self._handle_response(response)  # 处理错误
+        
+        return response.content
+    
+    def get_app_info(self) -> Dict:
+        """
+        获取应用基本信息
+        
+        Returns:
+            Dict: 应用信息
+        """
+        url = f"{self.base_url}/info"
+        
+        logger.info("获取应用基本信息")
+        
+        response = requests.get(url, headers=self.headers)
+        return self._handle_response(response)
+    
+    def get_app_parameters(self) -> Dict:
+        """
+        获取应用参数
+        
+        Returns:
+            Dict: 应用参数
+        """
+        url = f"{self.base_url}/parameters"
+        
+        logger.info("获取应用参数")
+        
+        response = requests.get(url, headers=self.headers)
+        return self._handle_response(response)
+    
+    def create_file_input(
+        self, 
+        file_id: str, 
+        file_type: str = "image",
+        transfer_method: str = "local_file"
+    ) -> Dict:
+        """
+        创建文件输入参数
+        
+        Args:
+            file_id (str): 文件ID
+            file_type (str, optional): 文件类型，默认为"image"
+            transfer_method (str, optional): 传输方式，默认为"local_file"
+            
+        Returns:
+            Dict: 文件输入参数
+        """
+        if isinstance(file_type, FileType):
+            file_type = file_type.value
+        
+        if isinstance(transfer_method, TransferMethod):
+            transfer_method = transfer_method.value
+        
+        return {
+            "type": file_type,
+            "transfer_method": transfer_method,
+            "upload_file_id": file_id
+        }
+    
+    def create_url_input(
+        self, 
+        url: str, 
+        file_type: str = "image",
+        transfer_method: str = "remote_url"
+    ) -> Dict:
+        """
+        创建URL输入参数
+        
+        Args:
+            url (str): 文件URL
+            file_type (str, optional): 文件类型，默认为"image"
+            transfer_method (str, optional): 传输方式，默认为"remote_url"
+            
+        Returns:
+            Dict: URL输入参数
+        """
+        if isinstance(file_type, FileType):
+            file_type = file_type.value
+        
+        if isinstance(transfer_method, TransferMethod):
+            transfer_method = transfer_method.value
+        
+        return {
+            "type": file_type,
+            "transfer_method": transfer_method,
+            "url": url
+        }
+
+# 示例代码
+def example_text_generation_blocking():
+    """文本生成阻塞模式示例"""
+    client = SandanClient("YOUR_API_KEY")
+    response = client.send_completion_message(
+        "你好，请介绍一下自己", 
+        response_mode=ResponseMode.BLOCKING
+    )
+    print(f"回答: {response['answer']}")
+
+def example_text_generation_streaming():
+    """文本生成流式模式示例"""
+    client = SandanClient("YOUR_API_KEY")
+    events = client.send_completion_message(
+        "你好，请介绍一下自己", 
+        response_mode=ResponseMode.STREAMING
+    )
+    
+    for event in events:
+        if "event" in event:
+            if event["event"] == "message":
+                print(f"回复片段: {event['answer']}", end="", flush=True)
+            elif event["event"] == "message_end":
+                print("\n消息结束，元数据:", event.get("metadata", {}))
+                if "usage" in event:
+                    print(f"模型用量: {event['usage']}")
+        elif "answer" in event:
+            print(f"{event['answer']}", end="", flush=True)
+
+def example_file_upload():
+    """文件上传示例"""
+    client = SandanClient("YOUR_API_KEY")
+    # 上传图片
+    result = client.upload_file("path/to/image.jpg", "user123")
+    file_id = result["id"]
+    
+    # 使用上传的图片发送消息
+    file_input = client.create_file_input(file_id)
+    response = client.send_completion_message(
+        "请描述这张图片", 
+        files=[file_input],
+        response_mode=ResponseMode.BLOCKING
+    )
+    print(f"回答: {response['answer']}")
+
+async def example_async():
+    """异步调用示例"""
+    client = SandanClient("YOUR_API_KEY")
+    
+    async def event_callback(event_data):
+        if "event" in event_data:
+            if event_data["event"] == "message":
+                print(f"回复片段: {event_data['answer']}", end="", flush=True)
+            elif event_data["event"] == "message_end":
+                print("\n消息结束")
+        elif "answer" in event_data:
+            print(f"{event_data['answer']}", end="", flush=True)
+    
+    await client.send_completion_message_async(
+        "你好，请介绍一下自己", 
+        callback=event_callback
+    )
+
+# 导出类
+__all__ = ['DifyClient', 'DifyChatClient', 'SandanClient', 'ResponseMode', 'FileType', 'TransferMethod', 
+           'MessageRating', 'DifyApiError', 'SandanApiError']
+
+if __name__ == "__main__":
+    # 可以在这里调用示例函数
+    example_text_generation_blocking()
