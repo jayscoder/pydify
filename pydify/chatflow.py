@@ -29,6 +29,7 @@ class ChatflowClient(DifyBaseClient):
         conversation_id: str = None,
         files: List[Dict[str, Any]] = None,
         auto_generate_name: bool = True,
+        **kwargs
     ) -> Union[Dict[str, Any], Generator[Dict[str, Any], None, None]]:
         """
         发送对话消息，创建会话消息。
@@ -41,6 +42,7 @@ class ChatflowClient(DifyBaseClient):
             conversation_id (str, optional): 会话ID，基于之前的聊天记录继续对话时需提供。默认为None
             files (List[Dict[str, Any]], optional): 要包含在消息中的文件列表，每个文件为一个字典。默认为None
             auto_generate_name (bool, optional): 是否自动生成会话标题。默认为True
+            **kwargs: 额外的请求参数，如timeout、max_retries等
             
         Returns:
             Union[Dict[str, Any], Generator[Dict[str, Any], None, None]]:
@@ -49,7 +51,7 @@ class ChatflowClient(DifyBaseClient):
                 
         Raises:
             ValueError: 当提供了无效的参数时
-            requests.HTTPError: 当API请求失败时
+            DifyAPIError: 当API请求失败时
         """
         if response_mode not in ["streaming", "blocking"]:
             raise ValueError("response_mode must be 'streaming' or 'blocking'")
@@ -61,8 +63,8 @@ class ChatflowClient(DifyBaseClient):
             "auto_generate_name": auto_generate_name,
         }
         
-        if inputs:
-            payload["inputs"] = inputs
+        # 确保inputs字段始终存在，即使是空字典
+        payload["inputs"] = inputs or {}
             
         if conversation_id:
             payload["conversation_id"] = conversation_id
@@ -73,9 +75,9 @@ class ChatflowClient(DifyBaseClient):
         endpoint = "chat-messages"
         
         if response_mode == "streaming":
-            return self.post_stream(endpoint, json_data=payload)
+            return self.post_stream(endpoint, json_data=payload, **kwargs)
         else:
-            return self.post(endpoint, json_data=payload)
+            return self.post(endpoint, json_data=payload, **kwargs)
             
     def stop_response(self, task_id: str, user: str) -> Dict[str, Any]:
         """

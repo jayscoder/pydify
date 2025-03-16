@@ -25,6 +25,7 @@ class TextGenerationClient(DifyBaseClient):
         response_mode: str = "streaming",
         inputs: Dict[str, Any] = None,
         files: List[Dict[str, Any]] = None,
+        **kwargs  # 添加kwargs参数支持
     ) -> Union[Dict[str, Any], Generator[Dict[str, Any], None, None]]:
         """
         发送消息给文本生成应用。
@@ -35,6 +36,7 @@ class TextGenerationClient(DifyBaseClient):
             response_mode (str, optional): 响应模式，'streaming'（流式）或'blocking'（阻塞）。默认为'streaming'
             inputs (Dict[str, Any], optional): 额外的输入参数。默认为None，若提供，会与query合并
             files (List[Dict[str, Any]], optional): 要包含在消息中的文件列表，每个文件为一个字典。默认为None
+            **kwargs: 额外的请求参数，如timeout、max_retries等
             
         Returns:
             Union[Dict[str, Any], Generator[Dict[str, Any], None, None]]:
@@ -68,9 +70,9 @@ class TextGenerationClient(DifyBaseClient):
         endpoint = "completion-messages"
         
         if response_mode == "streaming":
-            return self.post_stream(endpoint, json_data=payload)
+            return self.post_stream(endpoint, json_data=payload, **kwargs)  # 传递kwargs
         else:
-            return self.post(endpoint, json_data=payload)
+            return self.post(endpoint, json_data=payload, **kwargs)  # 传递kwargs
             
     def stop_completion(self, task_id: str, user: str) -> Dict[str, Any]:
         """

@@ -8,7 +8,7 @@ import os
 import json
 from typing import Dict, Any, List, Optional, Union, Generator, BinaryIO, Tuple
 
-from .common import DifyBaseClient
+from .common import DifyBaseClient, DifyAPIError
 
 
 class WorkflowClient(DifyBaseClient):
@@ -23,15 +23,24 @@ class WorkflowClient(DifyBaseClient):
         user: str,
         response_mode: str = "streaming",
         files: List[Dict[str, Any]] = None,
+        **kwargs
     ) -> Union[Dict[str, Any], Generator[Dict[str, Any], None, None]]:
         """
         执行工作流。
+
+        注意：此方法的参数格式可能需要根据您的Dify API版本进行调整。
+        如果遇到"input is required in input form"或类似错误，您可能需要修改以下代码。
+        常见的API参数格式有:
+        1. {"inputs": {"prompt": "value"}, ...} - 复数形式嵌套
+        2. {"input": {"prompt": "value"}, ...} - 单数形式嵌套
+        3. {"prompt": "value", ...} - 扁平结构，无嵌套
 
         Args:
             inputs (Dict[str, Any]): 工作流输入变量
             user (str): 用户标识
             response_mode (str, optional): 响应模式，'streaming'（流式）或'blocking'（阻塞）。默认为'streaming'。
             files (List[Dict[str, Any]], optional): 文件列表，每个文件为一个字典，包含类型、传递方式和URL/ID。
+            **kwargs: 额外的请求参数，如timeout、max_retries等
 
         Returns:
             Union[Dict[str, Any], Generator[Dict[str, Any], None, None]]:
@@ -40,11 +49,13 @@ class WorkflowClient(DifyBaseClient):
 
         Raises:
             ValueError: 当提供了无效的参数时
-            requests.HTTPError: 当API请求失败时
+            DifyAPIError: 当API请求失败时
         """
         if response_mode not in ["streaming", "blocking"]:
             raise ValueError("response_mode must be 'streaming' or 'blocking'")
 
+        # 注意：如果您收到参数相关的错误，可能需要根据您的API版本修改以下代码
+        # 当前我们使用 "inputs" 作为嵌套参数名 (复数形式)
         payload = {
             "inputs": inputs,
             "response_mode": response_mode,
@@ -56,28 +67,48 @@ class WorkflowClient(DifyBaseClient):
 
         endpoint = "workflows/run"
 
-        if response_mode == "streaming":
-            return self.post_stream(endpoint, json_data=payload)
-        else:
-            return self.post(endpoint, json_data=payload)
+        # 打印实际发送的payload，帮助调试
+        print(f"发送工作流请求: {endpoint}")
+        print(f"请求内容: {json.dumps(payload, ensure_ascii=False)}")
 
-    def stop_task(self, task_id: str, user: str) -> Dict[str, Any]:
+        try:
+            if response_mode == "streaming":
+                return self.post_stream(endpoint, json_data=payload, **kwargs)
+            else:
+                return self.post(endpoint, json_data=payload, **kwargs)
+        except DifyAPIError as e:
+            # 捕获并增强特定的API错误，提供更有用的提示
+            if "input is required" in str(e).lower() or "invalid_param" in str(e).lower():
+                error_msg = f"{str(e)}\n\n可能的解决方法:\n"
+                error_msg += "1. 检查您的API版本和参数格式要求\n"
+                error_msg += "2. 修改workflow.py中的run方法中的payload格式:\n"
+                error_msg += "   - 尝试将'inputs'改为'input'(单数形式)\n"
+                error_msg += "   - 或尝试直接使用扁平结构\n"
+                error_msg += "3. 参考Dify官方API文档查看最新的参数格式\n"
+                
+                raise DifyAPIError(error_msg, status_code=e.status_code, error_data=e.error_data)
+            else:
+                # 原样抛出其他错误
+                raise
+
+    def stop_task(self, task_id: str, user: str, **kwargs) -> Dict[str, Any]:
         """
         停止正在执行的工作流任务。
 
         Args:
             task_id (str): 任务ID
             user (str): 用户标识
+            **kwargs: 额外的请求参数，如timeout、max_retries等
 
         Returns:
             Dict[str, Any]: 停止任务的响应数据
 
         Raises:
-            requests.HTTPError: 当API请求失败时
+            DifyAPIError: 当API请求失败时
         """
         endpoint = f"workflows/tasks/{task_id}/stop"
         payload = {"user": user}
-        return self.post(endpoint, json_data=payload)
+        return self.post(endpoint, json_data=payload, **kwargs)
 
     def upload_file(self, file_path: str, user: str) -> Dict[str, Any]:
         """
@@ -131,6 +162,7 @@ class WorkflowClient(DifyBaseClient):
         status: str = None,
         page: int = 1,
         limit: int = 20,
+        **kwargs
     ) -> Dict[str, Any]:
         """
         获取工作流执行日志。
@@ -140,12 +172,13 @@ class WorkflowClient(DifyBaseClient):
             status (str, optional): 执行状态，'succeeded'、'failed'或'stopped'
             page (int, optional): 页码，默认为1
             limit (int, optional): 每页数量，默认为20
+            **kwargs: 额外的请求参数，如timeout、max_retries等
 
         Returns:
             Dict[str, Any]: 日志数据
 
         Raises:
-            requests.HTTPError: 当API请求失败时
+            DifyAPIError: 当API请求失败时
         """
         params = {"page": page, "limit": limit}
         if keyword:
@@ -153,19 +186,22 @@ class WorkflowClient(DifyBaseClient):
         if status:
             params["status"] = status
 
-        return self.get("workflows/logs", params=params)
+        return self.get("workflows/logs", params=params, **kwargs)
 
-    def get_app_info(self) -> Dict[str, Any]:
+    def get_app_info(self, **kwargs) -> Dict[str, Any]:
         """
         获取应用基本信息。
 
+        Args:
+            **kwargs: 额外的请求参数，如timeout、max_retries等
+            
         Returns:
             Dict[str, Any]: 应用信息数据
 
         Raises:
-            requests.HTTPError: 当API请求失败时
+            DifyAPIError: 当API请求失败时
         """
-        return self.get("info")
+        return self.get("info", **kwargs)
 
     def process_streaming_response(
         self, 

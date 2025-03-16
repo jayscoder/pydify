@@ -127,23 +127,60 @@ class AgentClient(DifyBaseClient):
             
         return self.post(endpoint, json_data=payload)
         
-    def get_suggested_questions(self, message_id: str, user: str) -> Dict[str, Any]:
+    def get_suggested_questions(self, message_id: str, user: str, **kwargs) -> Dict[str, Any]:
         """
         获取下一轮建议问题列表。
         
         Args:
             message_id (str): 消息ID
             user (str): 用户标识
+            **kwargs: 额外的请求参数，如timeout、max_retries等
             
         Returns:
             Dict[str, Any]: 建议问题列表
             
         Raises:
-            requests.HTTPError: 当API请求失败时
+            DifyAPIError: 当API请求失败时
         """
-        endpoint = f"messages/{message_id}/suggested"
-        params = {"user": user}
-        return self.get(endpoint, params=params)
+        # 尝试多种可能的端点路径格式
+        possible_endpoints = [
+            f"messages/{message_id}/suggested",  # 原始格式
+             f"messages/{message_id}/suggested-questions",  # 新格式1
+            f"chat-messages/{message_id}/suggested-questions",  # 新格式2
+            "suggested-questions",  # 当前格式
+        ]
+
+        params = {
+            "user": user,
+        }
+        
+        # 添加详细日志
+        # print(f"请求推荐问题: 消息ID={message_id}, 用户={user}")
+        
+        # 尝试所有可能的端点，直到找到一个有效的
+        last_error = None
+        for endpoint in possible_endpoints:
+            try:
+                params_to_use = params.copy()
+                # 如果端点是standalone的suggested-questions，需要添加message_id参数
+                if endpoint == "suggested-questions":
+                    params_to_use["message_id"] = message_id
+                else:
+                    # 否则可能不需要在参数中包含message_id
+                    params_to_use.pop("message_id", None)
+                
+                print(f"尝试端点: {endpoint}, 参数: {params_to_use}")
+                result = self.get(endpoint, params=params_to_use, **kwargs)
+                print(f"端点 {endpoint} 请求成功!")
+                return result
+            except Exception as e:
+                last_error = e
+                print(f"端点 {endpoint} 请求失败: {str(e)}")
+                continue
+        
+        # 如果所有端点都失败，记录最后一个错误并返回空结果
+        print(f"所有推荐问题端点请求都失败。最后错误: {str(last_error)}")
+        return {"data": []}
         
     def get_messages(
         self,

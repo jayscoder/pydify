@@ -103,12 +103,43 @@ class DifyBaseClient:
             except (requests.RequestException, ConnectionError) as e:
                 # 如果是网络错误且还有重试次数，则重试
                 if attempt < max_retries:
-                    print(f"网络错误: {str(e)}，{attempt+1}秒后重试...")
+                    # 提供更详细的错误信息
+                    error_type = type(e).__name__
+                    
+                    # 检测具体的连接问题类型
+                    if isinstance(e, requests.exceptions.SSLError):
+                        error_msg = f"SSL连接错误: {str(e)}"
+                    elif isinstance(e, requests.exceptions.ConnectTimeout):
+                        error_msg = f"连接超时: {str(e)}"
+                    elif isinstance(e, requests.exceptions.ReadTimeout):
+                        error_msg = f"读取超时: {str(e)}"
+                    elif isinstance(e, requests.exceptions.ConnectionError):
+                        error_msg = f"网络连接错误: {str(e)}"
+                    else:
+                        error_msg = f"网络错误({error_type}): {str(e)}"
+                        
+                    print(f"{error_msg}，{attempt+1}秒后重试...")
                     import time
                     time.sleep(retry_delay)
                     continue
                 
-                raise DifyAPIError(f"网络请求异常: {str(e)}")
+                # 提供更友好的错误信息
+                error_type = type(e).__name__
+                if isinstance(e, requests.exceptions.SSLError):
+                    error_msg = f"SSL连接错误: {str(e)}"
+                elif isinstance(e, requests.exceptions.ConnectTimeout):
+                    error_msg = f"连接超时: {str(e)}"
+                elif isinstance(e, requests.exceptions.ReadTimeout):
+                    error_msg = f"读取超时: {str(e)}"
+                elif isinstance(e, requests.exceptions.ConnectionError):
+                    error_msg = f"网络连接错误: {str(e)}"
+                else:
+                    error_msg = f"网络错误({error_type}): {str(e)}"
+                
+                # 提供连接问题的建议
+                suggestions = "\n请检查:\n1. 网络连接是否正常\n2. API地址是否正确\n3. 服务器是否可用\n4. SSL证书是否有效"
+                
+                raise DifyAPIError(f"{error_msg}{suggestions}")
 
     def get(self, endpoint: str, **kwargs) -> Dict[str, Any]:
         """
@@ -252,13 +283,43 @@ class DifyBaseClient:
             except (requests.RequestException, ConnectionError) as e:
                 # 如果是网络错误且还有重试次数，则重试
                 if attempt < max_retries:
-                    print(f"网络错误: {str(e)}，{attempt+1}秒后重试...")
+                    # 提供更详细的错误信息
+                    error_type = type(e).__name__
+                    
+                    # 检测具体的连接问题类型
+                    if isinstance(e, requests.exceptions.SSLError):
+                        error_msg = f"SSL连接错误: {str(e)}"
+                    elif isinstance(e, requests.exceptions.ConnectTimeout):
+                        error_msg = f"连接超时: {str(e)}"
+                    elif isinstance(e, requests.exceptions.ReadTimeout):
+                        error_msg = f"读取超时: {str(e)}"
+                    elif isinstance(e, requests.exceptions.ConnectionError):
+                        error_msg = f"网络连接错误: {str(e)}"
+                    else:
+                        error_msg = f"网络错误({error_type}): {str(e)}"
+                        
+                    print(f"{error_msg}，{attempt+1}秒后重试...")
                     import time
                     time.sleep(retry_delay)
                     continue
                 
-                # 如果已经重试了所有次数仍失败，抛出异常
-                raise DifyAPIError(f"流式请求异常: {str(e)}")
+                # 提供更友好的错误信息
+                error_type = type(e).__name__
+                if isinstance(e, requests.exceptions.SSLError):
+                    error_msg = f"SSL连接错误: {str(e)}"
+                elif isinstance(e, requests.exceptions.ConnectTimeout):
+                    error_msg = f"连接超时: {str(e)}"
+                elif isinstance(e, requests.exceptions.ReadTimeout):
+                    error_msg = f"读取超时: {str(e)}"
+                elif isinstance(e, requests.exceptions.ConnectionError):
+                    error_msg = f"网络连接错误: {str(e)}"
+                else:
+                    error_msg = f"网络错误({error_type}): {str(e)}"
+                
+                # 提供连接问题的建议
+                suggestions = "\n请检查:\n1. 网络连接是否正常\n2. API地址是否正确\n3. 服务器是否可用\n4. SSL证书是否有效"
+                
+                raise DifyAPIError(f"{error_msg}{suggestions}")
     
     # 通用方法 - 这些方法在多个子类中重复出现，可以移到基类
     
@@ -348,6 +409,7 @@ class DifyBaseClient:
         user: str,
         rating: str = None,
         content: str = None,
+        **kwargs  # 添加kwargs参数支持
     ) -> Dict[str, Any]:
         """
         对消息进行反馈（点赞/点踩）。
@@ -357,6 +419,7 @@ class DifyBaseClient:
             user (str): 用户标识
             rating (str, optional): 评价，可选值：'like'(点赞), 'dislike'(点踩), None(撤销)。默认为None
             content (str, optional): 反馈的具体信息。默认为None
+            **kwargs: 额外的请求参数，如timeout、max_retries等
 
         Returns:
             Dict[str, Any]: 反馈结果
@@ -376,7 +439,7 @@ class DifyBaseClient:
         if content:
             payload["content"] = content
             
-        return self.post(f"messages/{message_id}/feedbacks", json_data=payload)
+        return self.post(f"messages/{message_id}/feedbacks", json_data=payload, **kwargs)
     
     def get_app_info(self) -> Dict[str, Any]:
         """

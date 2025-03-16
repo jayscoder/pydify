@@ -6,6 +6,7 @@ Chatbot对话应用支持会话持久化，可将之前的聊天记录作为上�
 """
 
 import os
+import json
 from typing import Dict, Any, List, Optional, Union, Generator
 
 from .common import DifyBaseClient
@@ -27,6 +28,7 @@ class ChatbotClient(DifyBaseClient):
         conversation_id: str = None,
         files: List[Dict[str, Any]] = None,
         auto_generate_name: bool = True,
+        **kwargs
     ) -> Union[Dict[str, Any], Generator[Dict[str, Any], None, None]]:
         """
         发送对话消息，创建会话消息。
@@ -39,6 +41,7 @@ class ChatbotClient(DifyBaseClient):
             conversation_id (str, optional): 会话ID，基于之前的聊天记录继续对话时需提供。默认为None
             files (List[Dict[str, Any]], optional): 要包含在消息中的文件列表，每个文件为一个字典。默认为None
             auto_generate_name (bool, optional): 是否自动生成会话标题。默认为True
+            **kwargs: 额外的请求参数，如timeout、max_retries等
             
         Returns:
             Union[Dict[str, Any], Generator[Dict[str, Any], None, None]]:
@@ -59,8 +62,8 @@ class ChatbotClient(DifyBaseClient):
             "auto_generate_name": auto_generate_name,
         }
         
-        if inputs:
-            payload["inputs"] = inputs
+        # 确保inputs始终存在，即使是空字典
+        payload["inputs"] = inputs or {}
             
         if conversation_id:
             payload["conversation_id"] = conversation_id
@@ -70,10 +73,14 @@ class ChatbotClient(DifyBaseClient):
             
         endpoint = "chat-messages"
         
+        # 打印请求信息，便于调试
+        print(f"请求URL: {self.base_url}{endpoint}")
+        print(f"请求参数: {json.dumps(payload)}")
+        
         if response_mode == "streaming":
-            return self.post_stream(endpoint, json_data=payload)
+            return self.post_stream(endpoint, json_data=payload, **kwargs)
         else:
-            return self.post(endpoint, json_data=payload)
+            return self.post(endpoint, json_data=payload, **kwargs)
             
     def stop_response(self, task_id: str, user: str) -> Dict[str, Any]:
         """
