@@ -1,419 +1,271 @@
 # Pydify
 
-Pydify 是一个用于与 Dify API 和 Sandan API 交互的 Python 客户端库。它提供了三个主要的客户端类：
+Pydify 是一个用于与 Dify API 交互的 Python 客户端库。
 
-- `DifyClient`：用于与原始 Dify API 交互
-- `DifyChatClient`：用于与聊天 API 交互，支持标准的对话模型应用
-- `SandanClient`：用于与 sandanapp.com 文本生成应用 API 交互
+## 关于 Dify
+
+[Dify](https://github.com/langgenius/dify) 是一个开源的 LLM 应用开发平台，提供直观的界面将 AI 工作流、RAG 管道、代理能力、模型管理、可观察性功能等结合在一起，使您能够快速从原型转向生产环境。
+
+Dify 平台主要特点：
+
+- 🤖 **AI 工作流**：支持构建和部署复杂的 AI 应用流程
+- 📚 **RAG 管道**：内置检索增强生成能力，轻松连接到您的数据
+- 🧠 **代理能力**：支持创建自动化智能代理
+- 🔄 **模型管理**：集成多种 LLM 模型（OpenAI、Anthropic、Gemini、LLaMA 等）
+- 📊 **可观察性**：应用性能和使用情况的监控与分析
+
+目前，Dify 在 GitHub 上拥有超过 82k 星标，是 LLM 应用开发领域备受欢迎的开源项目。
+
+## 简介
+
+Pydify 提供了一个简洁、易用的接口，用于访问 Dify 平台的各种功能，包括：
+
+- 对话管理 (Chatbot/Agent/Chatflow)
+- 文本生成 (Text Generation)
+- 工作流执行 (Workflow)
+- 文件处理
+- 多模态功能 (语音转文字、文字转语音)
+- 会话管理
+- 应用信息查询
 
 ## 安装
 
 ```bash
-# 通过 pip 安装
 pip install pydify
 ```
 
-## 功能特点
+## 快速开始
 
-### DifyClient 主要功能：
+### 创建客户端
 
-- 执行工作流（阻塞模式和流式模式）
-- 异步执行工作流
-- 上传文件
-- 获取工作流状态
-- 停止工作流执行
-- 获取应用信息和参数
-
-### DifyChatClient 新增功能：
-
-- 发送聊天消息（阻塞模式和流式模式）
-- 异步发送聊天消息
-- 文件上传（支持图片、音频等）
-- 停止聊天响应
-- 消息反馈（点赞/点踩）
-- 获取建议问题
-- 会话管理（获取列表、获取历史消息、删除会话、重命名）
-- 语音转文字、文字转语音
-- 获取应用信息、参数和元信息
-
-### SandanClient 主要功能：
-
-- 发送文本生成消息（阻塞模式和流式模式）
-- 异步发送文本生成消息
-- 文件上传（主要支持图片）
-- 停止文本生成响应
-- 消息反馈（点赞/点踩）
-- 文字转语音
-- 获取应用信息和参数
-
-## 基本用法
-
-### 使用 DifyClient
+有两种方式创建 pydify 客户端：
 
 ```python
-from pydify import DifyClient, ResponseMode
+# 方式一：直接创建 DifyClient 实例
+from pydify import DifyClient
 
-# 初始化客户端
-api_key = "your_api_key_here"
-client = DifyClient(api_key, "https://api.dify.ai/v1")
-
-# 阻塞模式执行工作流
-result = client.run_workflow(
-    inputs={"query": "你好，请介绍一下自己"},
-    response_mode=ResponseMode.BLOCKING,
-    user="test_user_123"
-)
-print("执行结果:", result)
-
-# 流式模式执行工作流
-stream = client.run_workflow(
-    inputs={"query": "给我讲个故事"},
-    response_mode=ResponseMode.STREAMING,
-    user="test_user_123"
+client = DifyClient(
+    api_key="your_api_key_here",
+    base_url="https://api.dify.ai/v1"  # 可选，默认为 https://api.dify.ai/v1
 )
 
-# 处理流式响应
-for line in stream:
-    if line.startswith('data: '):
-        data = line[6:]  # 移除 'data: ' 前缀
-        try:
-            event_data = json.loads(data)
-            print(f"事件: {event_data.get('event', 'unknown')}")
-        except json.JSONDecodeError:
-            print(f"解析事件数据失败: {data}")
+# 方式二：使用便捷函数创建（支持从环境变量读取配置）
+from pydify import create_client
+
+# 从环境变量 DIFY_API_KEY 和 DIFY_API_BASE_URL 读取
+client = create_client()
+
+# 或者直接提供参数
+client = create_client(api_key="your_api_key_here")
 ```
 
-### 使用 DifyChatClient
+### 基本用法示例
+
+#### 1. 发送对话消息
 
 ```python
-from pydify import DifyChatClient, ResponseMode, MessageRating
-
-# 初始化聊天客户端
-api_key = "your_api_key_here"
-chat_client = DifyChatClient(api_key, "http://sandanapp.com/v1")
-
-# 发送聊天消息（阻塞模式）
-result = chat_client.send_chat_message(
+# 阻塞式响应
+response = client.chat.create_message(
     query="你好，请介绍一下自己",
-    response_mode=ResponseMode.BLOCKING,
-    user="chat_user_123"
-)
-print("聊天回复:", result)
-
-# 获取会话列表
-conversations = chat_client.get_conversations(
-    user="chat_user_123",
-    limit=10
-)
-print("会话列表:", conversations)
-
-# 上传文件
-file_result = chat_client.upload_file(
-    file_path="example.png",
-    user="chat_user_123"
-)
-file_id = file_result.get("id")
-
-# 发送带图片的消息
-result = chat_client.send_chat_message(
-    query="这张图片是什么?",
-    files=[chat_client.create_file_input(file_id, "image", "local_file")],
-    user="chat_user_123"
-)
-```
-
-### 使用 SandanClient
-
-```python
-from pydify import SandanClient, ResponseMode, MessageRating
-
-# 初始化客户端
-api_key = "your_api_key_here"
-client = SandanClient(api_key)  # 默认 base_url 为 "http://sandanapp.com/v1"
-
-# 阻塞模式发送消息
-response = client.send_completion_message(
-    query="你好，请介绍一下自己",
-    response_mode=ResponseMode.BLOCKING,
-    user="user_123"
-)
-print("回答:", response["answer"])
-
-# 流式模式发送消息
-events = client.send_completion_message(
-    query="给我讲个故事",
-    response_mode=ResponseMode.STREAMING,
-    user="user_123"
-)
-
-# 处理流式响应
-for event in events:
-    if "event" in event:
-        if event["event"] == "message":
-            print(f"回复片段: {event['answer']}", end="", flush=True)
-        elif event["event"] == "message_end":
-            print("\n消息结束，元数据:", event.get("metadata", {}))
-            if "usage" in event:
-                print(f"模型用量: {event['usage']}")
-    elif "answer" in event:
-        print(f"{event['answer']}", end="", flush=True)
-
-# 上传文件
-result = client.upload_file("path/to/image.jpg", "user_123")
-file_id = result["id"]
-
-# 使用上传的图片发送消息
-file_input = client.create_file_input(file_id)
-response = client.send_completion_message(
-    query="请描述这张图片",
-    files=[file_input],
-    response_mode=ResponseMode.BLOCKING,
-    user="user_123"
-)
-print(f"回答: {response['answer']}")
-
-# 发送消息反馈
-client.send_message_feedback(
-    message_id="message_id_123",
-    rating=MessageRating.LIKE,
     user="user_123",
-    content="很好的回答！"
+    response_mode="blocking"
 )
+print(response.data)
 
-# 文字转语音
-audio_data = client.text_to_audio(
-    text="这是一段测试文本",
-    user="user_123"
-)
-# 保存音频数据
-with open("output.mp3", "wb") as f:
-    f.write(audio_data)
-
-# 异步使用
-import asyncio
-
-async def run_async_example():
-    async def event_callback(event_data):
-        if "event" in event_data:
-            if event_data["event"] == "message":
-                print(f"回复片段: {event_data['answer']}", end="", flush=True)
-            elif event_data["event"] == "message_end":
-                print("\n消息结束")
-        elif "answer" in event_data:
-            print(f"{event_data['answer']}", end="", flush=True)
-
-    await client.send_completion_message_async(
-        query="异步测试消息",
-        callback=event_callback,
-        user="async_user_123"
-    )
-
-    # 异步上传文件
-    file_result = await client.upload_file_async(
-        file_path="example.png",
-        user="async_user_123"
-    )
-    print("文件上传结果:", file_result)
-
-# 运行异步示例
-asyncio.run(run_async_example())
-```
-
-## 详细 API 文档
-
-### DifyChatClient API
-
-#### 发送聊天消息
-
-```python
-# 阻塞模式
-result = chat_client.send_chat_message(
-    query="你好",
-    inputs={"name": "张三"},  # 可选，变量输入
-    response_mode=ResponseMode.BLOCKING,
+# 流式响应
+stream = client.chat.create_message(
+    query="讲一个故事",
     user="user_123",
-    conversation_id="conv_id",  # 可选，继续已有对话
-    files=[file_input],  # 可选，文件列表
-    auto_generate_name=True  # 可选，自动生成对话名称
+    response_mode="streaming"
 )
 
-# 流式模式
-stream = chat_client.send_chat_message(
-    query="给我讲个故事",
-    response_mode=ResponseMode.STREAMING,
-    user="user_123"
-)
-
+# 方式一：逐个事件处理
 for event in stream:
-    print(f"事件类型: {event.get('event')}")
-    if event.get('event') == 'message':
-        print(f"内容: {event.get('answer')}")
-    elif event.get('event') == 'message_end':
-        print("对话结束")
+    if event.get("type") == "message":
+        print(event.get("answer", ""), end="", flush=True)
+
+# 方式二：收集完整响应
+full_text = stream.collect_response()
+print(f"\n完整回答: {full_text}")
 ```
 
-#### 文件处理
+#### 2. 执行文本生成任务
 
 ```python
-# 上传文件
-file_result = chat_client.upload_file(
-    file_path="example.png",
-    user="user_123"
-)
-file_id = file_result.get("id")
-
-# 上传二进制内容
-with open("example.png", "rb") as f:
-    file_content = f.read()
-
-file_result = chat_client.upload_file_content(
-    file_content=io.BytesIO(file_content),
-    filename="example.png",
+response = client.completion.create_completion(
+    inputs={"query": "写一篇关于人工智能的短文"},
     user="user_123",
-    mime_type="image/png"  # 可选
+    response_mode="streaming"
 )
 
-# 创建文件输入参数
-file_input = chat_client.create_file_input(
-    file_id=file_id,
-    file_type="image",
-    transfer_method="local_file"
-)
-
-# 创建URL输入参数
-url_input = chat_client.create_url_input(
-    url="https://example.com/image.jpg",
-    file_type="image",
-    transfer_method="remote_url"
-)
+for event in response:
+    if event.get("type") == "message":
+        print(event.get("answer", ""), end="", flush=True)
 ```
 
-#### 会话管理
+#### 3. 执行工作流
 
 ```python
-# 获取会话列表
-conversations = chat_client.get_conversations(
-    user="user_123",
-    limit=20,
-    last_id="last_conv_id",  # 可选
-    sort_by="-updated_at"  # 可选
-)
-
-# 获取会话消息历史
-messages = chat_client.get_conversation_messages(
-    conversation_id="conv_id",
-    user="user_123",
-    first_id="first_message_id",  # 可选
-    limit=20  # 可选
-)
-
-# 删除会话
-result = chat_client.delete_conversation(
-    conversation_id="conv_id",
+response = client.workflow.run_workflow(
+    inputs={"query": "分析这段文字的情感"},
     user="user_123"
 )
 
-# 重命名会话
-result = chat_client.rename_conversation(
-    conversation_id="conv_id",
-    user="user_123",
-    name="新会话名称",  # 可选
-    auto_generate=False  # 可选
-)
+for event in response:
+    print(event)
 ```
 
-#### 消息反馈
+#### 4. 文件上传
 
 ```python
-# 点赞消息
-result = chat_client.send_message_feedback(
-    message_id="msg_id",
-    rating=MessageRating.LIKE,
-    user="user_123",
-    content="这条回复非常有用"  # 可选
-)
-
-# 点踩消息
-result = chat_client.send_message_feedback(
-    message_id="msg_id",
-    rating=MessageRating.DISLIKE,
+# 上传本地文件
+response = client.file.upload(
+    file="/path/to/document.pdf",
     user="user_123"
 )
+file_id = response.data.get("id")
 
-# 撤销反馈
-result = chat_client.send_message_feedback(
-    message_id="msg_id",
-    rating=MessageRating.NONE,
-    user="user_123"
-)
+# 或上传文件对象
+with open("/path/to/image.jpg", "rb") as f:
+    response = client.file.upload(
+        file=f,
+        user="user_123",
+        filename="image.jpg"
+    )
 ```
 
-#### 语音功能
+#### 5. 多模态功能
 
 ```python
 # 语音转文字
-result = chat_client.audio_to_text(
-    file_path="speech.mp3",
+response = client.multimodal.audio_to_text(
+    file="/path/to/audio.mp3",
     user="user_123"
 )
-text = result.get("text")
+text = response.data.get("text")
+print(f"转写结果: {text}")
 
 # 文字转语音
-audio_data = chat_client.text_to_audio(
-    text="你好，世界！",
+audio_data = client.multimodal.text_to_audio(
+    text="这是一段测试文本",
     user="user_123"
 )
 
-# 或通过消息ID转换
-audio_data = chat_client.text_to_audio(
-    message_id="msg_id",
-    user="user_123"
-)
-
-# 保存音频
+# 保存音频到本地
 with open("output.wav", "wb") as f:
     f.write(audio_data)
 ```
 
-#### 其他功能
+#### 6. 会话管理
 
 ```python
-# 获取应用信息
-app_info = chat_client.get_app_info()
+# 获取会话列表
+conversations = client.conversation.list_conversations(user="user_123")
+print(conversations.data)
 
-# 获取应用参数
-app_params = chat_client.get_app_parameters()
-
-# 获取应用元信息
-app_meta = chat_client.get_app_meta()
-
-# 获取建议问题
-suggestions = chat_client.get_suggested_questions(
-    message_id="msg_id",
+# 删除会话
+client.conversation.delete_conversation(
+    conversation_id="conv_123",
     user="user_123"
 )
 
-# 停止响应
-result = chat_client.stop_chat_response(
-    task_id="task_id",
+# 重命名会话
+client.conversation.rename_conversation(
+    conversation_id="conv_123",
+    name="新会话名称",
     user="user_123"
 )
 ```
 
-## 错误处理
-
-所有 API 错误都会抛出 `DifyApiError` 异常，包含状态码和错误消息：
+#### 7. 获取应用信息
 
 ```python
-from pydify import DifyChatClient, DifyApiError
+# 应用基本信息
+info = client.info.get_app_info()
+print(f"应用名称: {info.data.get('name')}")
+
+# 应用参数
+params = client.info.get_parameters()
+print(params.data)
+
+# 元数据
+meta = client.info.get_meta()
+print(meta.data)
+```
+
+## 异常处理
+
+pydify 定义了几种异常类型用于处理不同错误情况：
+
+```python
+from pydify import DifyClient, DifyRequestError, DifyServerError, DifyAuthError
 
 try:
-    client = DifyChatClient("invalid_api_key")
-    result = client.get_app_info()
-except DifyApiError as e:
-    print(f"API 错误: {e.status_code} - {e.message}")
+    client = DifyClient("invalid_api_key")
+    response = client.chat.create_message(
+        query="你好",
+        user="user_123"
+    )
+except DifyAuthError as e:
+    print(f"认证错误: {e.message}")
+except DifyRequestError as e:
+    print(f"请求错误: {e.message}, 状态码: {e.status_code}")
+except DifyServerError as e:
+    print(f"服务器错误: {e.message}")
 ```
 
-## 开发与贡献
+## 配置
 
-欢迎贡献代码或提出问题！请在 GitHub 上提交 Issue 或 Pull Request。
+### 环境变量
+
+为了便于开发和测试，pydify 支持从环境变量加载配置：
+
+- `DIFY_API_KEY`: API 密钥
+- `DIFY_API_BASE_URL`: API 基础 URL (默认为 "https://api.dify.ai/v1")
+
+您可以在项目根目录创建一个 `.env` 文件来设置这些变量：
+
+```
+DIFY_API_KEY=your_api_key_here
+DIFY_API_BASE_URL=https://api.dify.ai/v1
+```
+
+> **注意**: 请确保将 `.env` 文件添加到 `.gitignore` 中，避免将敏感信息提交到版本控制系统。
+
+## 运行测试
+
+pydify 包含了单元测试和集成测试。
+
+### 准备工作
+
+1. 复制 `.env.example` 文件为 `.env`，并更新其中的 API 密钥：
+
+```bash
+cp .env.example .env
+# 编辑 .env 文件，设置 DIFY_API_KEY
+```
+
+2. 安装测试依赖：
+
+```bash
+pip install -r tests/requirements_test.txt
+```
+
+### 运行测试
+
+使用以下命令运行测试：
+
+```bash
+# 运行所有测试
+python tests/run_tests.py
+
+# 只运行单元测试（不需要有效的 API 密钥）
+python tests/run_tests.py unit
+
+# 只运行集成测试（需要有效的 API 密钥）
+python tests/run_tests.py integration
+```
+
+## 完整 API 文档
+
+请查看 [API 文档](https://github.com/yourusername/pydify/docs) 以获取更详细的 API 使用说明。
