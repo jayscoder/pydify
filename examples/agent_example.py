@@ -9,18 +9,39 @@ import sys
 import base64
 from pprint import pprint
 
+# load_env
+from dotenv import load_dotenv
+load_dotenv()
+
 # 将父目录添加到 sys.path，使示例可以直接运行
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from pydify import AgentClient
 
 # 从环境变量或直接设置 API 密钥
-API_KEY = os.environ.get("DIFY_API_KEY", "app-JH2PWol59GDhOfLpB1Qwvts3")
-BASE_URL = os.environ.get("DIFY_BASE_URL", "http://sandanapp.com/v1")
+API_KEY = os.environ.get("DIFY_API_KEY_AGENT", "app-JH2PWol59GDhOfLpB1Qwvts3")
+BASE_URL = os.environ.get("DIFY_BASE_URL", "http://sandanapp.com:8080/v1")
 USER_ID = "user_123"  # 用户唯一标识
 
+# 配置API请求参数
+REQUEST_TIMEOUT = 30  # API请求超时时间(秒)
+MAX_RETRIES = 3       # 最大重试次数
+RETRY_DELAY = 2       # 重试延迟时间(秒)
+
 # 初始化客户端
-client = AgentClient(api_key=API_KEY, base_url=BASE_URL)
+client = AgentClient(
+    api_key=API_KEY,
+    base_url=BASE_URL,
+)
+
+# 自定义请求参数的函数
+def get_request_kwargs():
+    """返回一个包含请求参数的字典，可用于所有API请求"""
+    return {
+        "timeout": REQUEST_TIMEOUT,
+        "max_retries": MAX_RETRIES,
+        "retry_delay": RETRY_DELAY
+    }
 
 def example_get_app_info():
     """获取应用信息示例"""

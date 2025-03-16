@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from pydify import WorkflowClient
 
 # 从环境变量或直接设置 API 密钥
-API_KEY = os.environ.get("DIFY_API_KEY", "your_api_key_here")
+API_KEY = os.environ.get("DIFY_API_KEY_WORKFLOW", "your_api_key_here")
 BASE_URL = os.environ.get("DIFY_BASE_URL", "http://your-dify-instance.com/v1")
 USER_ID = "user_123"  # 用户唯一标识
 

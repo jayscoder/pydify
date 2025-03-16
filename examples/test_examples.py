@@ -15,7 +15,7 @@ API_KEYS = {
 }
 
 # 设置API基础URL
-DIFY_BASE_URL = "http://sandanapp.com/v1"
+DIFY_BASE_URL = "http://sandanapp.com:8080/v1"
 
 # 将父目录添加到 sys.path，使示例可以直接运行
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))

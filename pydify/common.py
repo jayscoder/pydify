@@ -65,21 +65,50 @@ class DifyBaseClient:
         url = urljoin(self.base_url, endpoint)
         headers = kwargs.pop("headers", {})
         headers.update(self._get_headers())
-
-        response = requests.request(method, url, headers=headers, **kwargs)
         
-        if not response.ok:
-            error_msg = f"API request failed: {response.status_code}"
-            error_data = {}
+        # 设置重试机制
+        max_retries = kwargs.pop("max_retries", 2)
+        retry_delay = kwargs.pop("retry_delay", 1)
+        timeout = kwargs.pop("timeout", 30)
+        
+        # 添加超时参数
+        kwargs["timeout"] = timeout
+        
+        for attempt in range(max_retries + 1):
             try:
-                error_data = response.json()
-                error_msg = f"{error_msg} - {error_data.get('error', {}).get('message', '')}"
-            except RequestsJSONDecodeError:
-                pass
-            
-            raise DifyAPIError(error_msg, status_code=response.status_code, error_data=error_data)
-        
-        return response
+                response = requests.request(method, url, headers=headers, **kwargs)
+                
+                if not response.ok:
+                    error_msg = f"API request failed: {response.status_code}"
+                    error_data = {}
+                    try:
+                        error_data = response.json()
+                        error_msg = f"{error_msg} - {error_data.get('error', {}).get('message', '')}"
+                    except RequestsJSONDecodeError:
+                        if response.text:
+                            error_msg = f"{error_msg} - {response.text[:100]}"
+                    
+                    # 如果是可重试的错误码，并且还有重试次数，则重试
+                    if response.status_code in [429, 500, 502, 503, 504] and attempt < max_retries:
+                        print(f"请求失败，状态码: {response.status_code}，{attempt+1}秒后重试...")
+                        import time
+                        time.sleep(retry_delay)
+                        continue
+                    
+                    # 否则抛出异常
+                    raise DifyAPIError(error_msg, status_code=response.status_code, error_data=error_data)
+                
+                return response
+                
+            except (requests.RequestException, ConnectionError) as e:
+                # 如果是网络错误且还有重试次数，则重试
+                if attempt < max_retries:
+                    print(f"网络错误: {str(e)}，{attempt+1}秒后重试...")
+                    import time
+                    time.sleep(retry_delay)
+                    continue
+                
+                raise DifyAPIError(f"网络请求异常: {str(e)}")
 
     def get(self, endpoint: str, **kwargs) -> Dict[str, Any]:
         """
@@ -102,10 +131,10 @@ class DifyBaseClient:
                 return {}
             return response.json()
         except RequestsJSONDecodeError as e:
-            # 捕获JSON解析错误，提供更有用的错误消息
-            error_msg = f"无法解析API响应为JSON: {str(e)}"
-            error_data = {"response_text": response.text[:100], "endpoint": endpoint}
-            raise DifyAPIError(error_msg, response.status_code, error_data) from e
+            # 捕获JSON解析错误，打印警告信息并返回空字典
+            print(f"警告: 无法解析API响应为JSON ({endpoint})")
+            print(f"响应内容: {response.text[:100]}")
+            return {}
 
     def post(self, endpoint: str, data: Dict[str, Any] = None, json_data: Dict[str, Any] = None, **kwargs) -> Dict[str, Any]:
         """
@@ -130,10 +159,10 @@ class DifyBaseClient:
                 return {}
             return response.json()
         except RequestsJSONDecodeError as e:
-            # 捕获JSON解析错误，提供更有用的错误消息
-            error_msg = f"无法解析API响应为JSON: {str(e)}"
-            error_data = {"response_text": response.text[:100], "endpoint": endpoint}
-            raise DifyAPIError(error_msg, response.status_code, error_data) from e
+            # 捕获JSON解析错误，打印警告信息并返回空字典
+            print(f"警告: 无法解析API响应为JSON ({endpoint})")
+            print(f"响应内容: {response.text[:100]}")
+            return {}
 
     def post_stream(self, endpoint: str, json_data: Dict[str, Any], **kwargs) -> Generator[Dict[str, Any], None, None]:
         """
@@ -153,30 +182,66 @@ class DifyBaseClient:
         url = urljoin(self.base_url, endpoint)
         headers = kwargs.pop("headers", {})
         headers.update(self._get_headers())
-
-        with requests.post(url, json=json_data, headers=headers, stream=True, **kwargs) as response:
-            if not response.ok:
-                error_msg = f"API request failed: {response.status_code}"
-                error_data = {}
-                try:
-                    error_data = response.json()
-                    error_msg = f"{error_msg} - {error_data.get('error', {}).get('message', '')}"
-                except RequestsJSONDecodeError:
-                    pass
-                
-                raise DifyAPIError(error_msg, status_code=response.status_code, error_data=error_data)
-            
-            # 处理SSE流式响应
-            for line in response.iter_lines():
-                if line:
-                    line = line.decode('utf-8')
-                    if line.startswith('data: '):
-                        data = line[6:]  # 移除 'data: ' 前缀
+        
+        # 设置重试机制
+        max_retries = kwargs.pop("max_retries", 2)
+        retry_delay = kwargs.pop("retry_delay", 1)
+        timeout = kwargs.pop("timeout", 60)  # 流式请求需要更长的超时时间
+        
+        # 添加超时参数
+        kwargs["timeout"] = timeout
+        
+        for attempt in range(max_retries + 1):
+            try:
+                with requests.post(url, json=json_data, headers=headers, stream=True, **kwargs) as response:
+                    if not response.ok:
+                        error_msg = f"API request failed: {response.status_code}"
+                        error_data = {}
                         try:
-                            yield json.loads(data)
-                        except json.JSONDecodeError:
-                            # 忽略无法解析的行
-                            pass
+                            error_data = response.json()
+                            error_msg = f"{error_msg} - {error_data.get('error', {}).get('message', '')}"
+                        except RequestsJSONDecodeError:
+                            # 如果无法解析为JSON，提供一个简单的错误消息
+                            error_msg = f"{error_msg} - 响应无法解析为JSON"
+                            if response.text:
+                                print(f"响应内容: {response.text[:100]}")
+                        
+                        # 如果是可重试的错误码，并且还有重试次数，则重试
+                        if response.status_code in [429, 500, 502, 503, 504] and attempt < max_retries:
+                            print(f"请求失败，状态码: {response.status_code}，{attempt+1}秒后重试...")
+                            import time
+                            time.sleep(retry_delay)
+                            continue
+                        
+                        raise DifyAPIError(error_msg, status_code=response.status_code, error_data=error_data)
+                    
+                    # 处理SSE流式响应
+                    for line in response.iter_lines():
+                        if line:
+                            line = line.decode('utf-8')
+                            if line.startswith('data: '):
+                                data = line[6:]  # 移除 'data: ' 前缀
+                                try:
+                                    yield json.loads(data)
+                                except json.JSONDecodeError as e:
+                                    # 打印警告信息并继续处理
+                                    print(f"警告: 无法解析流式响应行为JSON: {data[:100]}")
+                                    # 返回一个带有错误信息的字典，而不是抛出异常
+                                    yield {"error": "JSON解析错误", "raw_data": data[:100]}
+                    
+                    # 如果成功完成了迭代，就跳出重试循环
+                    break
+                    
+            except (requests.RequestException, ConnectionError) as e:
+                # 如果是网络错误且还有重试次数，则重试
+                if attempt < max_retries:
+                    print(f"网络错误: {str(e)}，{attempt+1}秒后重试...")
+                    import time
+                    time.sleep(retry_delay)
+                    continue
+                
+                # 如果已经重试了所有次数仍失败，抛出异常
+                raise DifyAPIError(f"流式请求异常: {str(e)}")
     
     # 通用方法 - 这些方法在多个子类中重复出现，可以移到基类
     
