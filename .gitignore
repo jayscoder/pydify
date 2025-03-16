@@ -36,3 +36,5 @@ htmlcov/
 *~ 
 
 test.py
+
+./examples/test_examples.py

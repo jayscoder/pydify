@@ -12,7 +12,6 @@ from typing import Dict, Any, List, Optional, Union, Generator, BinaryIO, Tuple
 
 from .common import DifyBaseClient
 
-
 class AgentClient(DifyBaseClient):
     """Dify Agent应用客户端类。
     

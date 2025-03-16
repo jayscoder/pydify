@@ -11,4 +11,5 @@ from .chatflow import ChatflowClient
 from .agent import AgentClient
 from .text_generation import TextGenerationClient
 
+__version__ = "0.1.0"
 __all__ = ["WorkflowClient", "ChatbotClient", "ChatflowClient", "AgentClient", "TextGenerationClient"]

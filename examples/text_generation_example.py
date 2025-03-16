@@ -6,13 +6,16 @@ Text Generation 应用无会话支持，适合用于翻译、文章写作、总�
 """
 import os
 import sys
-import base64
 from pprint import pprint
 
 # 将父目录添加到 sys.path，使示例可以直接运行
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from pydify import TextGenerationClient
+from examples.utils import (
+    print_header, print_section, print_json, print_result_summary,
+    create_test_image, save_audio_data, get_standard_handlers, run_example
+)
 
 # 从环境变量或直接设置 API 密钥
 API_KEY = os.environ.get("DIFY_API_KEY", "your_api_key_here")
@@ -22,16 +25,17 @@ USER_ID = "user_123"  # 用户唯一标识
 # 初始化客户端
 client = TextGenerationClient(api_key=API_KEY, base_url=BASE_URL)
 
+# 获取标准事件处理函数
+handlers = get_standard_handlers("text_generation")
+
 def example_get_app_info():
     """获取应用信息示例"""
-    print("\n==== 获取应用信息 ====")
     info = client.get_app_info()
-    pprint(info)
+    print_json(info)
     return info
 
 def example_get_parameters():
     """获取应用参数示例"""
-    print("\n==== 获取应用参数 ====")
     params = client.get_parameters()
     print("开场白: ", params.get("opening_statement", ""))
     print("推荐问题: ", params.get("suggested_questions", []))
@@ -55,9 +59,6 @@ def example_get_parameters():
 
 def example_completion_blocking():
     """以阻塞模式发送消息示例"""
-    print("\n==== 文本生成示例（阻塞模式）====")
-    
-    # 发送消息（阻塞模式）
     response = client.completion(
         query="写一篇关于人工智能在医疗领域应用的短文，不少于300字",
         user=USER_ID,
@@ -78,23 +79,6 @@ def example_completion_blocking():
 
 def example_completion_streaming():
     """以流式模式发送消息示例"""
-    print("\n==== 文本生成示例（流式模式）====")
-    
-    # 消息处理函数
-    def on_message(chunk):
-        print(f"{chunk.get('answer', '')}", end="", flush=True)
-    
-    def on_message_end(chunk):
-        print("\n\n生成完成！")
-        if "metadata" in chunk and "usage" in chunk["metadata"]:
-            usage = chunk["metadata"]["usage"]
-            print(f"Token使用情况: 输入={usage.get('prompt_tokens', 0)}, "
-                  f"输出={usage.get('completion_tokens', 0)}, "
-                  f"总计={usage.get('total_tokens', 0)}")
-    
-    def on_error(chunk):
-        print(f"\n错误: {chunk.get('message', '未知错误')}")
-    
     print("\n请求生成文本: '请写一首关于春天的诗'")
     
     # 发送消息（流式模式）
@@ -105,23 +89,13 @@ def example_completion_streaming():
     )
     
     # 处理流式响应
-    result = client.process_streaming_response(
-        stream,
-        handle_message=on_message,
-        handle_message_end=on_message_end,
-        handle_error=on_error
-    )
-    
-    print("\n\n处理结果摘要:")
-    print(f"消息ID: {result.get('message_id')}")
-    print(f"任务ID: {result.get('task_id')}")
+    result = client.process_streaming_response(stream, **handlers)
+    print_result_summary(result)
     
     return result.get("message_id")
 
 def example_completion_with_custom_inputs():
     """使用自定义输入参数的示例"""
-    print("\n==== 使用自定义输入参数生成文本 ====")
-    
     # 假设应用定义了一些变量，如：主题(topic)、风格(style)、字数(word_count)
     inputs = {
         "query": "帮我写一篇文章",  # 基本查询
@@ -129,13 +103,6 @@ def example_completion_with_custom_inputs():
         "style": "科普",           # 风格
         "word_count": 500          # 字数要求
     }
-    
-    # 消息处理函数
-    def on_message(chunk):
-        print(f"{chunk.get('answer', '')}", end="", flush=True)
-    
-    def on_message_end(chunk):
-        print("\n\n生成完成！")
     
     print(f"\n生成文章，使用自定义参数: {inputs}")
     
@@ -150,16 +117,14 @@ def example_completion_with_custom_inputs():
     # 处理流式响应
     result = client.process_streaming_response(
         stream,
-        handle_message=on_message,
-        handle_message_end=on_message_end
+        handle_message=handlers["handle_message"],
+        handle_message_end=handlers["handle_message_end"]
     )
     
     return result.get("message_id")
 
 def example_message_feedback():
     """消息反馈示例"""
-    print("\n==== 消息反馈示例 ====")
-    
     # 先生成一条消息
     message_id = example_completion_blocking()
     
@@ -192,24 +157,9 @@ def example_message_feedback():
 
 def example_upload_file():
     """上传文件示例"""
-    print("\n==== 上传文件示例 ====")
-    
-    # 创建一个临时图片文件
     try:
-        import tempfile
-        from PIL import Image, ImageDraw
-        
-        # 创建一个简单的图片
-        img = Image.new('RGB', (300, 200), color = (73, 109, 137))
-        d = ImageDraw.Draw(img)
-        d.text((100, 100), "Dify Test Image", fill=(255, 255, 0))
-        
-        # 保存到临时文件
-        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
-            img_path = f.name
-            img.save(img_path)
-        
-        print(f"创建测试图片: {img_path}")
+        # 创建测试图片
+        img_path = create_test_image("Dify Text Generation Test")
         
         # 上传图片
         result = client.upload_file(
@@ -228,8 +178,8 @@ def example_upload_file():
         # 返回上传的文件ID
         return result.get('id')
     
-    except ImportError:
-        print("需要安装PIL库才能运行此示例: pip install pillow")
+    except ImportError as e:
+        print(f"创建或上传文件时出错: {e}")
         return None
     except Exception as e:
         print(f"创建或上传文件时出错: {e}")
@@ -237,8 +187,6 @@ def example_upload_file():
 
 def example_completion_with_image():
     """带图片的文本生成示例"""
-    print("\n==== 带图片的文本生成示例 ====")
-    
     # 先上传图片
     file_id = example_upload_file()
     if not file_id:
@@ -252,13 +200,6 @@ def example_completion_with_image():
         "upload_file_id": file_id
     }]
     
-    # 消息处理函数
-    def on_message(chunk):
-        print(f"{chunk.get('answer', '')}", end="", flush=True)
-    
-    def on_message_end(chunk):
-        print("\n\n生成完成！")
-    
     # 发送带图片的消息
     print("\n发送带图片的请求: '描述这张图片'")
     stream = client.completion(
@@ -271,16 +212,14 @@ def example_completion_with_image():
     # 处理流式响应
     result = client.process_streaming_response(
         stream,
-        handle_message=on_message,
-        handle_message_end=on_message_end
+        handle_message=handlers["handle_message"],
+        handle_message_end=handlers["handle_message_end"]
     )
     
     return result.get("message_id")
 
 def example_text_to_audio():
     """文字转语音示例"""
-    print("\n==== 文字转语音示例 ====")
-    
     # 先生成一条消息
     message_id = example_completion_blocking()
     
@@ -306,14 +245,19 @@ def example_text_to_audio():
     if "audio_url" in result_from_text:
         print(f"音频URL: {result_from_text['audio_url']}")
     elif "audio" in result_from_text:
-        # 这里只打印前50个字符，因为base64字符串可能很长
-        print(f"音频数据(base64, 前50字符): {result_from_text.get('audio', '')[:50]}...")
+        # 保存音频并显示路径
+        audio_data = result_from_text.get('audio', '')
+        if audio_data:
+            try:
+                audio_path = save_audio_data(audio_data)
+                print(f"音频已保存: {audio_path}")
+            except Exception as e:
+                print(f"保存音频时出错: {e}")
     
     return result_from_text
 
 def example_stop_completion():
     """停止响应示例"""
-    print("\n==== 停止响应示例 ====")
     print("注意: 此示例需要有一个正在运行的长任务才能演示")
     
     # 启动一个需要较长时间的流式响应
@@ -353,15 +297,6 @@ def example_stop_completion():
 
 def example_completion_translation():
     """翻译示例"""
-    print("\n==== 文本翻译示例 ====")
-    
-    # 消息处理函数
-    def on_message(chunk):
-        print(f"{chunk.get('answer', '')}", end="", flush=True)
-    
-    def on_message_end(chunk):
-        print("\n\n翻译完成！")
-    
     # 假设应用有专门的翻译输入字段
     inputs = {
         "query": "将以下文本翻译成英文",
@@ -382,16 +317,14 @@ def example_completion_translation():
     # 处理流式响应
     result = client.process_streaming_response(
         stream,
-        handle_message=on_message,
-        handle_message_end=on_message_end
+        handle_message=handlers["handle_message"],
+        handle_message_end=handlers["handle_message_end"]
     )
     
     return result.get("message_id")
 
 def example_completion_summarization():
     """文本摘要示例"""
-    print("\n==== 文本摘要示例 ====")
-    
     # 准备一段长文本
     long_text = """
     人工智能(AI)正在以前所未有的速度发展。从自动驾驶汽车到智能助手，从推荐系统到医疗诊断，AI已经渗透到我们生活的方方面面。近年来，特别是大型语言模型(LLM)的出现，更是将AI的能力提升到了新的高度。大型语言模型如ChatGPT、Claude和Gemini能够理解和生成人类语言，回答问题，撰写各种风格的文章，甚至可以编写计码和解释复杂概念。
@@ -400,13 +333,6 @@ def example_completion_summarization():
     
     随着AI技术的不断发展，我们可以期待看到更加智能和高效的系统出现。未来的AI系统可能会更好地整合多种模态的信息，具有更强的推理能力和常识理解，能够自主学习和适应新环境，并且更加安全、公平和透明。同时，AI的发展也带来了一系列伦理和社会问题，如隐私保护、工作替代、偏见歧视等，这需要我们在技术发展的同时，也关注其对社会的影响，制定相应的政策和规范，确保AI的发展能够真正造福人类。
     """
-    
-    # 消息处理函数
-    def on_message(chunk):
-        print(f"{chunk.get('answer', '')}", end="", flush=True)
-    
-    def on_message_end(chunk):
-        print("\n\n摘要生成完成！")
     
     # 准备输入参数
     inputs = {
@@ -428,41 +354,41 @@ def example_completion_summarization():
     # 处理流式响应
     result = client.process_streaming_response(
         stream,
-        handle_message=on_message,
-        handle_message_end=on_message_end
+        handle_message=handlers["handle_message"],
+        handle_message_end=handlers["handle_message_end"]
     )
     
     return result.get("message_id")
 
 if __name__ == "__main__":
-    print("===== Pydify TextGenerationClient 示例 =====")
+    print_header("Pydify TextGenerationClient 示例")
     
     try:
         # 运行基本示例
-        example_get_app_info()
-        example_get_parameters()
+        run_example(example_get_app_info)
+        run_example(example_get_parameters)
         
         # 文本生成示例
-        example_completion_blocking()
-        example_completion_streaming()
+        run_example(example_completion_blocking)
+        run_example(example_completion_streaming)
         
         # 特定任务示例
-        example_completion_with_custom_inputs()
-        example_completion_translation()
-        example_completion_summarization()
+        run_example(example_completion_with_custom_inputs)
+        run_example(example_completion_translation)
+        run_example(example_completion_summarization)
         
         # 交互功能示例
-        example_message_feedback()
+        run_example(example_message_feedback)
         
         # 文件和多模态示例
-        # example_upload_file()  # 需要PIL库
-        # example_completion_with_image()  # 需要PIL库
+        # run_example(example_upload_file)  # 依赖PIL库
+        # run_example(example_completion_with_image)  # 依赖PIL库
         
         # 语音功能示例
-        # example_text_to_audio()
+        # run_example(example_text_to_audio)  # 可能需要base64解码支持
         
         # 其他功能示例
-        # example_stop_completion()  # 会发送长请求并中断
+        # run_example(example_stop_completion)  # 会发送长请求并中断
         
     except Exception as e:
         print(f"示例运行过程中发生错误: {e}")
