@@ -17,6 +17,7 @@ load_dotenv()
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from pydify import AgentClient
+from pydify.common import DifyAPIError
 
 # 从环境变量或直接设置 API 密钥
 API_KEY = os.environ.get("DIFY_API_KEY_AGENT", "app-JH2PWol59GDhOfLpB1Qwvts3")
@@ -73,7 +74,7 @@ def example_send_message_streaming():
     
     # 定义处理函数
     def on_agent_message(chunk):
-        print(f"收到文本块: {chunk.get('answer', '')}", end="", flush=True)
+        print(f"{chunk.get('answer', '')}", end="", flush=True)
     
     def on_agent_thought(chunk):
         print(f"\n\n[Agent思考] {chunk.get('position')}:")
@@ -96,29 +97,47 @@ def example_send_message_streaming():
     def on_error(chunk):
         print(f"\n错误: {chunk.get('message', '未知错误')}")
     
-    # 发送消息（流式模式，Agent只支持流式模式）
-    stream = client.send_message(
-        query="帮我搜索最近一周的股市行情，并分析趋势",
-        user=USER_ID
-    )
+    # 请求参数，包括加入重试和超时设置
+    request_kwargs = get_request_kwargs()
     
-    # 处理流式响应
-    result = client.process_streaming_response(
-        stream,
-        handle_agent_message=on_agent_message,
-        handle_agent_thought=on_agent_thought,
-        handle_message_file=on_message_file,
-        handle_message_end=on_message_end,
-        handle_error=on_error
-    )
+    try:
+        # 发送消息（流式模式，Agent只支持流式模式）
+        print("发送查询: '帮我搜索最近一周的股市行情，并分析趋势'")
+        stream = client.send_message(
+            query="帮我搜索最近一周的股市行情，并分析趋势",
+            user=USER_ID,
+            inputs={},  # 添加空的inputs参数
+            **request_kwargs  # 传递请求参数
+        )
+        
+        # 处理流式响应
+        result = client.process_streaming_response(
+            stream,
+            handle_agent_message=on_agent_message,
+            handle_agent_thought=on_agent_thought,
+            handle_message_file=on_message_file,
+            handle_message_end=on_message_end,
+            handle_error=on_error
+        )
+        
+        print("\n\n处理结果摘要:")
+        print(f"消息ID: {result.get('message_id')}")
+        print(f"会话ID: {result.get('conversation_id')}")
+        print(f"Agent思考步骤数: {len(result.get('agent_thoughts', []))}")
+        
+        # 返回会话ID，可用于后续对话
+        return result.get("conversation_id")
     
-    print("\n\n处理结果摘要:")
-    print(f"消息ID: {result.get('message_id')}")
-    print(f"会话ID: {result.get('conversation_id')}")
-    print(f"Agent思考步骤数: {len(result.get('agent_thoughts', []))}")
-    
-    # 返回会话ID，可用于后续对话
-    return result.get("conversation_id")
+    except DifyAPIError as e:
+        print(f"API错误: {str(e)}")
+        print(f"状态码: {e.status_code}")
+        print(f"错误数据: {e.error_data}")
+        return None
+    except Exception as e:
+        print(f"发生异常: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return None
 
 def example_continuation_conversation():
     """多轮对话示例"""
@@ -133,7 +152,7 @@ def example_continuation_conversation():
     
     # 继续对话函数
     def on_agent_message(chunk):
-        print(f"收到文本块: {chunk.get('answer', '')}", end="", flush=True)
+        print(f"{chunk.get('answer', '')}", end="", flush=True)
     
     def on_agent_thought(chunk):
         print(f"\n\n[Agent思考] {chunk.get('position')}:")
@@ -409,7 +428,7 @@ def example_send_message_with_image():
     
     # 定义处理函数
     def on_agent_message(chunk):
-        print(f"收到文本块: {chunk.get('answer', '')}", end="", flush=True)
+        print(f"{chunk.get('answer', '')}", end="", flush=True)
     
     def on_agent_thought(chunk):
         print(f"\n\n[Agent思考] {chunk.get('position')}:")

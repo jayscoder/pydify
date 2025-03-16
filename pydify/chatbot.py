@@ -202,7 +202,7 @@ class ChatbotClient(DifyBaseClient):
         示例:
             ```python
             def on_message(chunk):
-                print(f"收到文本块: {chunk['answer']}")
+                print(f"{chunk['answer']}")
                 
             def on_message_end(chunk):
                 print(f"消息结束: ID={chunk['message_id']}")

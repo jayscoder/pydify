@@ -73,7 +73,7 @@ def example_send_message_streaming():
     
     # 消息处理函数
     def on_message(chunk):
-        print(f"收到文本块: {chunk.get('answer', '')}", end="", flush=True)
+        print(f"{chunk.get('answer', '')}", end="", flush=True)
     
     def on_message_end(chunk):
         print("\n消息完成！")

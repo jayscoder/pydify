@@ -191,20 +191,37 @@ class DifyBaseClient:
         # 添加超时参数
         kwargs["timeout"] = timeout
         
+        # 打印请求信息，方便调试
+        print(f"请求URL: {url}")
+        print(f"请求参数: {json.dumps(json_data, ensure_ascii=False)[:500]}")
+        
         for attempt in range(max_retries + 1):
             try:
                 with requests.post(url, json=json_data, headers=headers, stream=True, **kwargs) as response:
                     if not response.ok:
                         error_msg = f"API request failed: {response.status_code}"
                         error_data = {}
+                        
                         try:
+                            # 尝试解析响应内容作为JSON
                             error_data = response.json()
-                            error_msg = f"{error_msg} - {error_data.get('error', {}).get('message', '')}"
-                        except RequestsJSONDecodeError:
-                            # 如果无法解析为JSON，提供一个简单的错误消息
-                            error_msg = f"{error_msg} - 响应无法解析为JSON"
+                            # 提取标准错误信息字段
+                            if "error" in error_data and isinstance(error_data["error"], dict):
+                                error_msg = f"{error_msg} - {error_data['error'].get('message', '')}"
+                            elif "message" in error_data:
+                                error_msg = f"{error_msg} - {error_data.get('message', '')}"
+                        except Exception:
+                            # 如果无法解析为JSON，提供原始响应内容
                             if response.text:
-                                print(f"响应内容: {response.text[:100]}")
+                                error_msg = f"{error_msg} - 响应内容: {response.text[:200]}"
+                            else:
+                                error_msg = f"{error_msg} - 服务器未返回错误详情"
+                        
+                        # 打印详细的错误信息，方便调试
+                        print(f"API请求失败 ({endpoint}):")
+                        print(f"状态码: {response.status_code}")
+                        print(f"响应头: {dict(response.headers)}")
+                        print(f"响应内容: {response.text[:500] if response.text else '(无内容)'}")
                         
                         # 如果是可重试的错误码，并且还有重试次数，则重试
                         if response.status_code in [429, 500, 502, 503, 504] and attempt < max_retries:

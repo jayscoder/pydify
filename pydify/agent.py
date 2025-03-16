@@ -28,6 +28,7 @@ class AgentClient(DifyBaseClient):
         conversation_id: str = None,
         files: List[Dict[str, Any]] = None,
         auto_generate_name: bool = True,
+        **kwargs  # 添加kwargs参数，用于接收额外的请求参数
     ) -> Generator[Dict[str, Any], None, None]:
         """
         发送对话消息，创建会话消息。在Agent模式下，只支持streaming流式模式。
@@ -40,13 +41,14 @@ class AgentClient(DifyBaseClient):
             conversation_id (str, optional): 会话ID，基于之前的聊天记录继续对话时需提供。默认为None
             files (List[Dict[str, Any]], optional): 要包含在消息中的文件列表，每个文件为一个字典。默认为None
             auto_generate_name (bool, optional): 是否自动生成会话标题。默认为True
+            **kwargs: 传递给底层API请求的额外参数，如timeout, max_retries等
             
         Returns:
             Generator[Dict[str, Any], None, None]: 返回字典生成器
                 
         Raises:
             ValueError: 当提供了无效的参数时
-            requests.HTTPError: 当API请求失败时
+            DifyAPIError: 当API请求失败时
         """
         if response_mode != "streaming":
             raise ValueError("Agent mode only supports streaming response mode")
@@ -56,11 +58,9 @@ class AgentClient(DifyBaseClient):
             "user": user,
             "response_mode": "streaming",
             "auto_generate_name": auto_generate_name,
+            "inputs": inputs or {},  # 确保inputs参数总是存在，如果未提供则使用空字典
         }
         
-        if inputs:
-            payload["inputs"] = inputs
-            
         if conversation_id:
             payload["conversation_id"] = conversation_id
             
@@ -69,7 +69,7 @@ class AgentClient(DifyBaseClient):
             
         endpoint = "chat-messages"
         
-        return self.post_stream(endpoint, json_data=payload)
+        return self.post_stream(endpoint, json_data=payload, **kwargs)  # 传递额外参数
             
     def stop_response(self, task_id: str, user: str) -> Dict[str, Any]:
         """
@@ -528,7 +528,8 @@ class AgentClient(DifyBaseClient):
         示例:
             ```python
             def on_agent_message(chunk):
-                print(f"收到文本块: {chunk['answer']}")
+                # 打印Agent返回的文本块
+                print(f"{chunk['answer']}")
                 
             def on_agent_thought(chunk):
                 print(f"Agent思考: {chunk['thought']}")
