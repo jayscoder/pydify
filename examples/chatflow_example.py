@@ -23,8 +23,22 @@ API_KEY = os.environ.get("DIFY_API_KEY_CHATFLOW", "your_api_key_here")
 BASE_URL = os.environ.get("DIFY_BASE_URL", "http://your-dify-instance.com/v1")
 USER_ID = "user_123"  # 用户唯一标识
 
+# 配置API请求参数
+REQUEST_TIMEOUT = 30  # API请求超时时间(秒)
+MAX_RETRIES = 3       # 最大重试次数
+RETRY_DELAY = 2       # 重试延迟时间(秒)
+
 # 初始化客户端
 client = ChatflowClient(api_key=API_KEY, base_url=BASE_URL)
+
+# 自定义请求参数的函数
+def get_request_kwargs():
+    """返回一个包含请求参数的字典，可用于所有API请求"""
+    return {
+        "timeout": REQUEST_TIMEOUT,
+        "max_retries": MAX_RETRIES,
+        "retry_delay": RETRY_DELAY
+    }
 
 def example_get_app_info():
     """获取应用信息示例"""
@@ -54,19 +68,31 @@ def example_send_message_blocking():
     """以阻塞模式发送消息示例"""
     print("\n==== 以阻塞模式发送消息 ====")
     
-    # 发送消息（阻塞模式）
-    response = client.send_message(
-        query="你好，请介绍一下自己",
-        user=USER_ID,
-        response_mode="blocking"
-    )
+    # 获取请求参数
+    request_kwargs = get_request_kwargs()
     
-    print("消息ID: ", response.get("message_id", ""))
-    print("会话ID: ", response.get("conversation_id", ""))
-    print("AI回答: ", response.get("answer", ""))
+    try:
+        # 发送消息（阻塞模式）
+        response = client.send_message(
+            query="你好，请介绍一下自己",
+            user=USER_ID,
+            response_mode="blocking",
+            inputs={},  # 添加空的inputs参数，即使没有特定输入
+            **request_kwargs  # 传递请求参数
+        )
+        
+        print("消息ID: ", response.get("message_id", ""))
+        print("会话ID: ", response.get("conversation_id", ""))
+        print("AI回答: ", response.get("answer", ""))
+        
+        # 返回会话ID，可用于后续对话
+        return response.get("conversation_id")
     
-    # 返回会话ID，可用于后续对话
-    return response.get("conversation_id")
+    except Exception as e:
+        print(f"发送消息时出错: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return None
 
 def example_send_message_streaming():
     """以流式模式发送消息示例"""
@@ -103,59 +129,79 @@ def example_send_message_streaming():
     def on_error(chunk):
         print(f"\n错误: {chunk.get('message', '未知错误')}")
     
-    # 发送消息（流式模式）
-    stream = client.send_message(
-        query="分析一下人工智能的未来发展趋势",
-        user=USER_ID,
-        response_mode="streaming"
-    )
+    # 获取请求参数
+    request_kwargs = get_request_kwargs()
     
-    # 处理流式响应
-    result = client.process_streaming_response(
-        stream,
-        handle_message=on_message,
-        handle_message_end=on_message_end,
-        handle_workflow_started=on_workflow_started,
-        handle_node_started=on_node_started,
-        handle_node_finished=on_node_finished,
-        handle_workflow_finished=on_workflow_finished,
-        handle_error=on_error
-    )
+    try:
+        # 发送消息（流式模式）
+        stream = client.send_message(
+            query="分析一下人工智能的未来发展趋势",
+            user=USER_ID,
+            response_mode="streaming",
+            inputs={},  # 添加空的inputs参数，即使没有特定输入
+            **request_kwargs  # 传递请求参数
+        )
+        
+        # 处理流式响应
+        result = client.process_streaming_response(
+            stream,
+            handle_message=on_message,
+            handle_message_end=on_message_end,
+            handle_workflow_started=on_workflow_started,
+            handle_node_started=on_node_started,
+            handle_node_finished=on_node_finished,
+            handle_workflow_finished=on_workflow_finished,
+            handle_error=on_error
+        )
+        
+        # 返回会话ID，可用于后续对话
+        return result.get("conversation_id")
     
-    print("\n\n处理结果摘要:")
-    print(f"消息ID: {result.get('message_id')}")
-    print(f"会话ID: {result.get('conversation_id')}")
-    print(f"工作流运行ID: {result.get('workflow_run_id')}")
-    print(f"节点数量: {len(result.get('nodes_data', []))}")
-    
-    # 返回会话ID，可用于后续对话
-    return result.get("conversation_id")
+    except Exception as e:
+        print(f"发送流式消息时出错: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return None
 
 def example_continuation_conversation():
     """多轮对话示例"""
     print("\n==== 多轮对话示例 ====")
     
-    # 第一轮对话
-    response1 = client.send_message(
-        query="你好，我想了解工作流编排的概念",
-        user=USER_ID,
-        response_mode="blocking"
-    )
+    # 获取请求参数
+    request_kwargs = get_request_kwargs()
     
-    conversation_id = response1.get("conversation_id")
-    print(f"第一轮对话 - AI: {response1.get('answer', '')}")
+    try:
+        # 第一轮对话
+        response1 = client.send_message(
+            query="你好，我想了解工作流编排的概念",
+            user=USER_ID,
+            response_mode="blocking",
+            inputs={},  # 添加空的inputs参数，即使没有特定输入
+            **request_kwargs  # 传递请求参数
+        )
+        
+        conversation_id = response1.get("conversation_id")
+        print(f"第一轮对话 - AI: {response1.get('answer', '')}")
+        
+        # 第二轮对话（在同一会话中）
+        response2 = client.send_message(
+            query="工作流编排有哪些常见的应用场景?",
+            user=USER_ID,
+            conversation_id=conversation_id,  # 使用第一轮返回的会话ID
+            response_mode="blocking",
+            inputs={},  # 添加空的inputs参数，即使没有特定输入
+            **request_kwargs  # 传递请求参数
+        )
+        
+        print(f"第二轮对话 - AI: {response2.get('answer', '')}")
+        
+        return conversation_id
     
-    # 第二轮对话（在同一会话中）
-    response2 = client.send_message(
-        query="能给我举个工作流编排的实际应用例子吗？",
-        user=USER_ID,
-        conversation_id=conversation_id,  # 使用第一轮返回的会话ID
-        response_mode="blocking"
-    )
-    
-    print(f"第二轮对话 - AI: {response2.get('answer', '')}")
-    
-    return conversation_id
+    except Exception as e:
+        print(f"多轮对话时出错: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return None
 
 def example_get_conversations():
     """获取会话列表示例"""

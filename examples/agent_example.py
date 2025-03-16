@@ -20,8 +20,8 @@ from pydify import AgentClient
 from pydify.common import DifyAPIError
 
 # 从环境变量或直接设置 API 密钥
-API_KEY = os.environ.get("DIFY_API_KEY_AGENT", "app-JH2PWol59GDhOfLpB1Qwvts3")
-BASE_URL = os.environ.get("DIFY_BASE_URL", "http://sandanapp.com:8080/v1")
+API_KEY = os.environ.get("DIFY_API_KEY_AGENT", 'your_api_key_here')
+BASE_URL = os.environ.get("DIFY_BASE_URL", 'http://your_base_url_here')
 USER_ID = "user_123"  # 用户唯一标识
 
 # 配置API请求参数
@@ -283,21 +283,39 @@ def example_get_suggested_questions():
         print("没有可用的消息，跳过此示例")
         return
     
-    # 获取推荐的下一轮问题
-    result = client.get_suggested_questions(
-        message_id=message_id,
-        user=USER_ID
-    )
+    print(f"使用消息ID: {message_id} 获取推荐问题")
     
-    questions = result.get("data", [])
-    if questions:
-        print("推荐的后续问题:")
-        for i, question in enumerate(questions, 1):
-            print(f"{i}. {question}")
-    else:
-        print("没有推荐问题")
+    # 请求参数，包括加入重试和超时设置
+    request_kwargs = get_request_kwargs()
     
-    return questions
+    try:
+        # 获取推荐的下一轮问题
+        result = client.get_suggested_questions(
+            message_id=message_id,
+            user=USER_ID,
+            **request_kwargs  # 传递请求参数
+        )
+        
+        questions = result.get("data", [])
+        if questions:
+            print("推荐的后续问题:")
+            for i, question in enumerate(questions, 1):
+                print(f"{i}. {question}")
+        else:
+            print("没有推荐问题")
+        
+        return questions
+    
+    except DifyAPIError as e:
+        print(f"API错误: {str(e)}")
+        print(f"状态码: {e.status_code}")
+        print(f"错误数据: {e.error_data}")
+        return []
+    except Exception as e:
+        print(f"发生异常: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return []
 
 def example_rename_conversation():
     """重命名会话示例"""

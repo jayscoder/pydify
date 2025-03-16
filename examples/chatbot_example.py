@@ -22,8 +22,22 @@ API_KEY = os.environ.get("DIFY_API_KEY_CHATBOT", "your_api_key_here")
 BASE_URL = os.environ.get("DIFY_BASE_URL", "http://your-dify-instance.com/v1")
 USER_ID = "user_123"  # 用户唯一标识
 
+# 配置API请求参数
+REQUEST_TIMEOUT = 30  # API请求超时时间(秒)
+MAX_RETRIES = 3       # 最大重试次数
+RETRY_DELAY = 2       # 重试延迟时间(秒)
+
 # 初始化客户端
 client = ChatbotClient(api_key=API_KEY, base_url=BASE_URL)
+
+# 自定义请求参数的函数
+def get_request_kwargs():
+    """返回一个包含请求参数的字典，可用于所有API请求"""
+    return {
+        "timeout": REQUEST_TIMEOUT,
+        "max_retries": MAX_RETRIES,
+        "retry_delay": RETRY_DELAY
+    }
 
 def example_get_app_info():
     """获取应用信息示例"""
@@ -53,19 +67,46 @@ def example_send_message_blocking():
     """以阻塞模式发送消息示例"""
     print("\n==== 以阻塞模式发送消息 ====")
     
-    # 发送消息（阻塞模式）
-    response = client.send_message(
-        query="你好，请介绍一下自己",
-        user=USER_ID,
-        response_mode="blocking"
-    )
+    # 获取请求参数
+    request_kwargs = get_request_kwargs()
     
-    print("消息ID: ", response.get("message_id", ""))
-    print("会话ID: ", response.get("conversation_id", ""))
-    print("AI回答: ", response.get("answer", ""))
+    try:
+        # 准备请求参数
+        query = "你好，请介绍一下自己"
+        payload = {
+            "query": query,
+            "user": USER_ID,
+            "response_mode": "blocking",
+            "inputs": {},
+            "auto_generate_name": True
+        }
+        
+        # 打印请求信息
+        print(f"请求URL: {client.base_url}chat-messages")
+        print(f"请求参数: {payload}")
+        
+        # 发送消息（阻塞模式）
+        response = client.send_message(
+            query=query,
+            user=USER_ID,
+            response_mode="blocking",
+            inputs={},  # 添加空的inputs参数，即使没有特定输入
+            **request_kwargs  # 传递请求参数
+        )
+        
+        print("消息ID: ", response.get("message_id", ""))
+        print("会话ID: ", response.get("conversation_id", ""))
+        print("AI回答: ", response.get("answer", ""))
+        
+        # 返回会话ID，可用于后续对话
+        return response.get("conversation_id")
     
-    # 返回会话ID，可用于后续对话
-    return response.get("conversation_id")
+    except Exception as e:
+        print(f"发送消息时出错: {str(e)}")
+        # 打印更详细的错误信息
+        import traceback
+        traceback.print_exc()
+        return None
 
 def example_send_message_streaming():
     """以流式模式发送消息示例"""
@@ -108,27 +149,39 @@ def example_continuation_conversation():
     """多轮对话示例"""
     print("\n==== 多轮对话示例 ====")
     
-    # 第一轮对话
-    response1 = client.send_message(
-        query="你好，我想学习Python编程",
-        user=USER_ID,
-        response_mode="blocking"
-    )
+    # 获取请求参数
+    request_kwargs = get_request_kwargs()
     
-    conversation_id = response1.get("conversation_id")
-    print(f"第一轮对话 - AI: {response1.get('answer', '')}")
+    try:
+        # 第一轮对话
+        response1 = client.send_message(
+            query="你好，我想学习Python编程",
+            user=USER_ID,
+            response_mode="blocking",
+            inputs={},
+            **request_kwargs
+        )
+        
+        conversation_id = response1.get("conversation_id")
+        print(f"第一轮对话 - AI: {response1.get('answer', '')}")
+        
+        # 第二轮对话（在同一会话中）
+        response2 = client.send_message(
+            query="有哪些适合初学者的Python库?",
+            user=USER_ID,
+            conversation_id=conversation_id,  # 使用第一轮返回的会话ID
+            response_mode="blocking",
+            inputs={},
+            **request_kwargs
+        )
+        
+        print(f"第二轮对话 - AI: {response2.get('answer', '')}")
+        
+        return conversation_id
     
-    # 第二轮对话（在同一会话中）
-    response2 = client.send_message(
-        query="有哪些适合初学者的Python库?",
-        user=USER_ID,
-        conversation_id=conversation_id,  # 使用第一轮返回的会话ID
-        response_mode="blocking"
-    )
-    
-    print(f"第二轮对话 - AI: {response2.get('answer', '')}")
-    
-    return conversation_id
+    except Exception as e:
+        print(f"多轮对话时出错: {str(e)}")
+        return None
 
 def example_get_conversations():
     """获取会话列表示例"""
