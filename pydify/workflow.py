@@ -4,11 +4,11 @@ Pydify - Dify Workflow应用客户端
 此模块提供与Dify Workflow应用API交互的客户端。
 """
 
-import os
 import json
-from typing import Dict, Any, List, Optional, Union, Generator, BinaryIO, Tuple
+import os
+from typing import Any, BinaryIO, Dict, Generator, List, Optional, Tuple, Union
 
-from .common import DifyBaseClient, DifyAPIError
+from .common import DifyAPIError, DifyBaseClient
 
 
 class WorkflowClient(DifyBaseClient):
@@ -23,7 +23,7 @@ class WorkflowClient(DifyBaseClient):
         user: str,
         response_mode: str = "streaming",
         files: List[Dict[str, Any]] = None,
-        **kwargs
+        **kwargs,
     ) -> Union[Dict[str, Any], Generator[Dict[str, Any], None, None]]:
         """
         执行工作流。
@@ -78,15 +78,20 @@ class WorkflowClient(DifyBaseClient):
                 return self.post(endpoint, json_data=payload, **kwargs)
         except DifyAPIError as e:
             # 捕获并增强特定的API错误，提供更有用的提示
-            if "input is required" in str(e).lower() or "invalid_param" in str(e).lower():
+            if (
+                "input is required" in str(e).lower()
+                or "invalid_param" in str(e).lower()
+            ):
                 error_msg = f"{str(e)}\n\n可能的解决方法:\n"
                 error_msg += "1. 检查您的API版本和参数格式要求\n"
                 error_msg += "2. 修改workflow.py中的run方法中的payload格式:\n"
                 error_msg += "   - 尝试将'inputs'改为'input'(单数形式)\n"
                 error_msg += "   - 或尝试直接使用扁平结构\n"
                 error_msg += "3. 参考Dify官方API文档查看最新的参数格式\n"
-                
-                raise DifyAPIError(error_msg, status_code=e.status_code, error_data=e.error_data)
+
+                raise DifyAPIError(
+                    error_msg, status_code=e.status_code, error_data=e.error_data
+                )
             else:
                 # 原样抛出其他错误
                 raise
@@ -127,10 +132,12 @@ class WorkflowClient(DifyBaseClient):
         """
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"File not found: {file_path}")
-        
+
         return super().upload_file(file_path, user)
-    
-    def upload_file_obj(self, file_obj: BinaryIO, filename: str, user: str) -> Dict[str, Any]:
+
+    def upload_file_obj(
+        self, file_obj: BinaryIO, filename: str, user: str
+    ) -> Dict[str, Any]:
         """
         上传文件对象到Dify API。
 
@@ -145,15 +152,17 @@ class WorkflowClient(DifyBaseClient):
         Raises:
             requests.HTTPError: 当API请求失败时
         """
-        files = {'file': (filename, file_obj)}
-        data = {'user': user}
-        url = os.path.join(self.base_url, 'files/upload')
-        
+        files = {"file": (filename, file_obj)}
+        data = {"user": user}
+        url = os.path.join(self.base_url, "files/upload")
+
         headers = self._get_headers()
         # 移除Content-Type，让requests自动设置multipart/form-data
-        headers.pop('Content-Type', None)
-        
-        response = self._request("POST", 'files/upload', headers=headers, files=files, data=data)
+        headers.pop("Content-Type", None)
+
+        response = self._request(
+            "POST", "files/upload", headers=headers, files=files, data=data
+        )
         return response.json()
 
     def get_logs(
@@ -162,7 +171,7 @@ class WorkflowClient(DifyBaseClient):
         status: str = None,
         page: int = 1,
         limit: int = 20,
-        **kwargs
+        **kwargs,
     ) -> Dict[str, Any]:
         """
         获取工作流执行日志。
@@ -194,7 +203,7 @@ class WorkflowClient(DifyBaseClient):
 
         Args:
             **kwargs: 额外的请求参数，如timeout、max_retries等
-            
+
         Returns:
             Dict[str, Any]: 应用信息数据
 
@@ -204,7 +213,7 @@ class WorkflowClient(DifyBaseClient):
         return self.get("info", **kwargs)
 
     def process_streaming_response(
-        self, 
+        self,
         stream_generator: Generator[Dict[str, Any], None, None],
         handle_workflow_started=None,
         handle_node_started=None,
@@ -221,7 +230,7 @@ class WorkflowClient(DifyBaseClient):
             stream_generator: 流式响应生成器
             handle_workflow_started: 工作流开始事件处理函数
             handle_node_started: 节点开始事件处理函数
-            handle_node_finished: 节点完成事件处理函数 
+            handle_node_finished: 节点完成事件处理函数
             handle_workflow_finished: 工作流完成事件处理函数
             handle_tts_message: TTS消息事件处理函数
             handle_tts_message_end: TTS消息结束事件处理函数
@@ -229,18 +238,18 @@ class WorkflowClient(DifyBaseClient):
 
         Returns:
             Dict[str, Any]: 最终工作流结果
-        
+
         示例:
             ```python
             def on_workflow_started(data):
                 print(f"工作流开始: {data['id']}")
-                
+
             def on_node_finished(data):
                 print(f"节点完成: {data['node_id']}, 状态: {data['status']}")
-                
+
             def on_workflow_finished(data):
                 print(f"工作流完成: {data['id']}, 状态: {data['status']}")
-                
+
             client = WorkflowClient(api_key)
             stream = client.run(inputs={"prompt": "你好"}, user="user123")
             result = client.process_streaming_response(
@@ -252,32 +261,32 @@ class WorkflowClient(DifyBaseClient):
             ```
         """
         final_result = {}
-        
+
         for chunk in stream_generator:
             event = chunk.get("event")
-            
+
             if event == "workflow_started" and handle_workflow_started:
                 handle_workflow_started(chunk.get("data", {}))
-            
+
             elif event == "node_started" and handle_node_started:
                 handle_node_started(chunk.get("data", {}))
-            
+
             elif event == "node_finished" and handle_node_finished:
                 handle_node_finished(chunk.get("data", {}))
-            
+
             elif event == "workflow_finished" and handle_workflow_finished:
                 data = chunk.get("data", {})
                 if handle_workflow_finished:
                     handle_workflow_finished(data)
                 final_result = data
-            
+
             elif event == "tts_message" and handle_tts_message:
                 handle_tts_message(chunk)
-            
+
             elif event == "tts_message_end" and handle_tts_message_end:
                 handle_tts_message_end(chunk)
-            
+
             elif event == "ping" and handle_ping:
                 handle_ping(chunk)
-        
+
         return final_result

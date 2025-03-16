@@ -1,4 +1,5 @@
 import os
+
 import setuptools
 
 # 优先读取README.rst，如果不存在则读取README.md
@@ -7,7 +8,9 @@ with open(readme_file, "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 # 根据文件扩展名确定内容类型
-long_description_content_type = "text/x-rst" if readme_file.endswith(".rst") else "text/markdown"
+long_description_content_type = (
+    "text/x-rst" if readme_file.endswith(".rst") else "text/markdown"
+)
 
 # 定义项目依赖
 install_requires = [
@@ -51,4 +54,4 @@ setuptools.setup(
     python_requires=">=3.7",
     install_requires=install_requires,
     extras_require=extras_require,
-) 
+)
