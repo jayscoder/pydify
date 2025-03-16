@@ -5,30 +5,10 @@ Pydify - Dify API的Python客户端库
 包括对话、文本生成、工作流、文件上传等。
 """
 
-from pydify import (
-    DifyClient,
-    create_client,
-    DifyException,
-    DifyRequestError,
-    DifyServerError, 
-    DifyAuthError,
-    DifyTimeoutError,
-    DifyRateLimitError,
-    DifyResponse,
-    DifyStreamResponse
-)
+from .workflow import WorkflowClient
+from .chatbot import ChatbotClient
+from .chatflow import ChatflowClient
+from .agent import AgentClient
+from .text_generation import TextGenerationClient
 
-__all__ = [
-    'DifyClient',
-    'create_client',
-    'DifyException',
-    'DifyRequestError',
-    'DifyServerError',
-    'DifyAuthError',
-    'DifyTimeoutError',
-    'DifyRateLimitError',
-    'DifyResponse',
-    'DifyStreamResponse'
-]
-
-__version__ = '0.1.0'
+__all__ = ["WorkflowClient", "ChatbotClient", "ChatflowClient", "AgentClient", "TextGenerationClient"]
