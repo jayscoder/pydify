@@ -27,19 +27,25 @@ class WorkflowClient(DifyBaseClient):
     ) -> Union[Dict[str, Any], Generator[Dict[str, Any], None, None]]:
         """
         执行工作流。
-
-        注意：此方法的参数格式可能需要根据您的Dify API版本进行调整。
-        如果遇到"input is required in input form"或类似错误，您可能需要修改以下代码。
-        常见的API参数格式有:
-        1. {"inputs": {"prompt": "value"}, ...} - 复数形式嵌套
-        2. {"input": {"prompt": "value"}, ...} - 单数形式嵌套
-        3. {"prompt": "value", ...} - 扁平结构，无嵌套
-
+        
         Args:
-            inputs (Dict[str, Any]): 工作流输入变量
+            inputs (Dict[str, Any]): 必需参数。包含工作流所需的输入变量键值对。
+                                   每个键对应一个变量名称,值为该变量的具体内容。
+                                   如果变量类型为文件,值需要是一个包含文件信息的字典,
+                                   具体格式参考files参数说明。
             user (str): 用户标识
             response_mode (str, optional): 响应模式，'streaming'（流式）或'blocking'（阻塞）。默认为'streaming'。
-            files (List[Dict[str, Any]], optional): 文件列表，每个文件为一个字典，包含类型、传递方式和URL/ID。
+            files (List[Dict[str, Any]], optional): 文件列表，每个文件为一个字典，包含以下字段：
+                - type (str): 文件类型，支持:
+                    - document: 支持'TXT', 'MD', 'MARKDOWN', 'PDF', 'HTML', 'XLSX', 'XLS', 
+                              'DOCX', 'CSV', 'EML', 'MSG', 'PPTX', 'PPT', 'XML', 'EPUB'
+                    - image: 支持'JPG', 'JPEG', 'PNG', 'GIF', 'WEBP', 'SVG'
+                    - audio: 支持'MP3', 'M4A', 'WAV', 'WEBM', 'AMR'
+                    - video: 支持'MP4', 'MOV', 'MPEG', 'MPGA'
+                    - custom: 支持其他文件类型
+                - transfer_method (str): 传递方式，'remote_url'(图片地址)或'local_file'(上传文件)
+                - url (str): 图片地址（仅当transfer_method为'remote_url'时需要）
+                - upload_file_id (str): 上传文件ID（仅当transfer_method为'local_file'时需要）
             **kwargs: 额外的请求参数，如timeout、max_retries等
 
         Returns:
@@ -50,6 +56,24 @@ class WorkflowClient(DifyBaseClient):
         Raises:
             ValueError: 当提供了无效的参数时
             DifyAPIError: 当API请求失败时
+
+        Example:
+            ```python
+            # 基本文本输入示例
+            inputs = {
+                "prompt": "分析最近的经济数据",
+                "data_source": "公开数据"
+            }
+
+            # 包含文件的输入示例
+            inputs = {
+                "document": {
+                    "type": "document",
+                    "transfer_method": "remote_url", 
+                    "url": "https://example.com/doc.pdf"
+                }
+            }
+            ```
         """
         if response_mode not in ["streaming", "blocking"]:
             raise ValueError("response_mode must be 'streaming' or 'blocking'")

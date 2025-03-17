@@ -515,19 +515,63 @@ class DifyBaseClient:
         """
         return self.get("info")
 
-    def get_parameters(self) -> Dict[str, Any]:
+    def get_parameters(self, **kwargs) -> Dict[str, Any]:
         """
-        获取应用参数，包括功能开关、输入参数名称、类型及默认值等。
-
+        获取应用参数，包括功能开关、输入参数配置、文件上传限制等。
+        
+        此方法通常用于应用初始化阶段，获取应用的各种配置参数和功能开关状态。
+        
+        Args:
+            **kwargs: 额外的请求参数，如timeout、max_retries等
+        
         Returns:
-            Dict[str, Any]: 应用参数配置
-
-       
-
+            Dict[str, Any]: 包含应用参数的字典，可能包含以下字段：
+                - opening_statement (str): 应用开场白文本
+                - suggested_questions (List[str]): 开场推荐问题列表
+                - suggested_questions_after_answer (Dict): 回答后推荐问题配置
+                    - enabled (bool): 是否启用此功能
+                - speech_to_text (Dict): 语音转文本功能配置
+                    - enabled (bool): 是否启用此功能
+                - retriever_resource (Dict): 引用和归属功能配置
+                    - enabled (bool): 是否启用此功能
+                - annotation_reply (Dict): 标记回复功能配置
+                    - enabled (bool): 是否启用此功能
+                - user_input_form (List[Dict]): 用户输入表单配置列表，每项可能包含：
+                    - text-input: 文本输入控件配置
+                    - paragraph: 段落文本输入控件配置
+                    - select: 下拉选择控件配置
+                - file_upload (Dict): 文件上传相关配置
+                    - image (Dict): 图片上传配置
+                        - enabled (bool): 是否启用图片上传
+                        - number_limits (int): 图片数量限制
+                        - transfer_methods (List[str]): 支持的传输方式
+                - system_parameters (Dict): 系统级参数
+                    - file_size_limit (int): 文档上传大小限制(MB)
+                    - image_file_size_limit (int): 图片上传大小限制(MB)
+                    - audio_file_size_limit (int): 音频上传大小限制(MB)
+                    - video_file_size_limit (int): 视频上传大小限制(MB)
+        
         Raises:
             DifyAPIError: 当API请求失败时
+        
+        Example:
+            ```python
+            # 获取应用参数
+            params = client.get_parameters()
+            
+            # 检查是否启用了图片上传
+            if params.get('file_upload', {}).get('image', {}).get('enabled', False):
+                print("此应用支持图片上传")
+                print(f"图片数量限制: {params['file_upload']['image']['number_limits']}")
+            
+            # 获取用户输入表单配置
+            forms = params.get('user_input_form', [])
+            for form in forms:
+                for form_type, config in form.items():
+                    print(f"表单类型: {form_type}, 字段名: {config.get('label')}")
+            ```
         """
-        return self.get("parameters")
+        return self.get("parameters", **kwargs)
 
     def get_conversations(
         self,
@@ -703,3 +747,68 @@ class DifyAPIError(Exception):
         if self.status_code:
             return f"[{self.status_code}] {self.message}"
         return self.message
+
+def analyze_app_capabilities(client):
+    """分析应用的功能和配置"""
+    # 获取应用参数
+    params = client.get_parameters()
+    
+    # 基本信息
+    print("=== 应用功能配置分析 ===")
+    
+    # 检查基本功能
+    features = []
+    if "opening_statement" in params and params["opening_statement"]:
+        features.append("开场白")
+    if params.get("suggested_questions"):
+        features.append("推荐问题")
+    if params.get("suggested_questions_after_answer", {}).get("enabled"):
+        features.append("回答后推荐问题")
+    if params.get("speech_to_text", {}).get("enabled"):
+        features.append("语音转文本")
+    if params.get("retriever_resource", {}).get("enabled"):
+        features.append("引用和归属")
+    if params.get("annotation_reply", {}).get("enabled"):
+        features.append("标记回复")
+        
+    print(f"启用的功能: {', '.join(features) if features else '无特殊功能'}")
+    
+    # 检查表单配置
+    if "user_input_form" in params:
+        form_types = []
+        variables = []
+        for item in params["user_input_form"]:
+            for form_type in item:
+                form_types.append(form_type)
+                variables.append(item[form_type].get("variable"))
+        
+        print(f"\n表单配置: 共{len(params['user_input_form'])}个控件")
+        print(f"控件类型: {', '.join(form_types)}")
+        print(f"变量名列表: {', '.join(variables)}")
+    
+    # 检查文件上传能力
+    if "file_upload" in params:
+        upload_types = []
+        for upload_type, config in params["file_upload"].items():
+            if config.get("enabled"):
+                upload_types.append(upload_type)
+        
+        if upload_types:
+            print(f"\n支持上传文件类型: {', '.join(upload_types)}")
+            
+            # 详细的图片上传配置
+            if "image" in params["file_upload"] and params["file_upload"]["image"].get("enabled"):
+                img_config = params["file_upload"]["image"]
+                print(f"图片上传限制: 最多{img_config.get('number_limits', 0)}张")
+                print(f"支持的传输方式: {', '.join(img_config.get('transfer_methods', []))}")
+    
+    # 检查系统参数
+    if "system_parameters" in params:
+        print("\n系统参数限制:")
+        for param, value in params["system_parameters"].items():
+            print(f"- {param}: {value}MB")
+    
+    return params
+
+# 使用示例
+app_params = analyze_app_capabilities(client)
