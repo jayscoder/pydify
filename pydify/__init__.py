@@ -11,7 +11,7 @@ from .chatflow import ChatflowClient
 from .text_generation import TextGenerationClient
 from .workflow import WorkflowClient
 
-__version__ = "0.1.0"
+__version__ = "0.1.2"
 __all__ = [
     "WorkflowClient",
     "ChatbotClient",

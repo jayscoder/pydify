@@ -515,6 +515,14 @@ class DifyBaseClient:
         """
         return self.get("info")
 
+    
+    ALLOWED_FILE_EXTENSIONS = {
+        'image': ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'],
+        'document': ['.txt', '.md', '.markdown', '.pdf', '.html', '.xlsx', '.xls', '.docx', '.csv', '.eml', '.msg', '.pptx', '.ppt', '.xml', '.epub'],
+        'audio': ['.mp3', '.m4a', '.wav', '.webm', '.amr'],
+        'video': ['.mp4', '.mov', '.mpeg', '.mpga']
+    }
+    
     def get_parameters(self, **kwargs) -> Dict[str, Any]:
         """
         获取应用参数，包括功能开关、输入参数配置、文件上传限制等。
@@ -536,21 +544,42 @@ class DifyBaseClient:
                     - enabled (bool): 是否启用此功能
                 - annotation_reply (Dict): 标记回复功能配置
                     - enabled (bool): 是否启用此功能
-                - user_input_form (List[Dict]): 用户输入表单配置列表，每项可能包含：
-                    - text-input: 文本输入控件配置
-                    - paragraph: 段落文本输入控件配置
-                    - select: 下拉选择控件配置
-                - file_upload (Dict): 文件上传相关配置
-                    - image (Dict): 图片上传配置
-                        - enabled (bool): 是否启用图片上传
-                        - number_limits (int): 图片数量限制
-                        - transfer_methods (List[str]): 支持的传输方式
+                - user_input_form (List[Dict]): 用户输入表单配置列表，每项包含一个控件配置:
+                    通用配置:
+                        - type: 控件类型
+                            - text-input: 单行文本输入
+                            - paragraph: 多行文本输入
+                            - select: 下拉选择框，需配置options选项列表
+                            - number: 数字输入框
+                            - file: 单文件上传，可限制文件类型和上传方式
+                            - file-list: 多文件上传，可设置最大数量
+                        - label: 显示名称
+                        - variable: 变量标识
+                        - required: 是否必填
+                        - max_length: 最大长度限制/最大数量限制
+                        - options: 选项值列表（可选）
+                    file/file-list类型控件特殊配置:
+                        - allowed_file_types (str): 允许的文件类型，可选值:
+                            - image: 图片文件
+                            - document: 文档文件
+                            - audio: 音频文件
+                            - video: 视频文件
+                            - custom: 自定义文件类型
+                        - allowed_file_extensions (List[str]): 允许的文件后缀列表
+                            (仅当allowed_file_types为custom时需要配置)
+                            - document类型包含: 'TXT', 'MD', 'MARKDOWN', 'PDF', 'HTML', 'XLSX', 
+                              'XLS', 'DOCX', 'CSV', 'EML', 'MSG', 'PPTX', 'PPT', 'XML', 'EPUB'
+                            - image类型包含: 'JPG', 'JPEG', 'PNG', 'GIF', 'WEBP', 'SVG'
+                            - audio类型包含: 'MP3', 'M4A', 'WAV', 'WEBM', 'AMR'
+                            - video类型包含: 'MP4', 'MOV', 'MPEG', 'MPGA'
+                        - allowed_file_upload_methods (List[str]): 允许的文件上传方式，可多选
+                            - remote_url: 远程URL上传
+                            - local_file: 本地文件上传
                 - system_parameters (Dict): 系统级参数
                     - file_size_limit (int): 文档上传大小限制(MB)
                     - image_file_size_limit (int): 图片上传大小限制(MB)
                     - audio_file_size_limit (int): 音频上传大小限制(MB)
                     - video_file_size_limit (int): 视频上传大小限制(MB)
-        
         Raises:
             DifyAPIError: 当API请求失败时
         
@@ -559,19 +588,86 @@ class DifyBaseClient:
             # 获取应用参数
             params = client.get_parameters()
             
-            # 检查是否启用了图片上传
-            if params.get('file_upload', {}).get('image', {}).get('enabled', False):
-                print("此应用支持图片上传")
-                print(f"图片数量限制: {params['file_upload']['image']['number_limits']}")
-            
-            # 获取用户输入表单配置
-            forms = params.get('user_input_form', [])
-            for form in forms:
-                for form_type, config in form.items():
-                    print(f"表单类型: {form_type}, 字段名: {config.get('label')}")
+            # 示例返回数据:
+            {
+                "user_input_form": [
+                    {
+                        "label": "Query",
+                        "variable": "query", 
+                        "required": true,
+                        "max_length": 1000, # 最大长度限制
+                        "type": "paragraph"
+                    },
+                    {
+                        'label': 'Input',
+                        'variable': 'input',
+                        'required': True,
+                        'max_length': 100, # 最大长度限制
+                        "type": "text-input"
+                    },
+                    {
+                        'label': 'Select',
+                        'variable': 'select',
+                        'required': True,
+                        'options': ['Option1', 'Option2', 'Option3'],
+                        "type": "select"
+                    },
+                    {
+                        'label': 'Number',
+                        'variable': 'number',
+                        'required': True,
+                        "type": "number"
+                    },
+                    {
+                        'label': 'Image',
+                        'variable': 'image',
+                        'required': True,
+                        "type": "file",
+                        'allowed_file_types': ['image'],
+                            'allowed_file_extensions': [...],
+                            'allowed_file_upload_methods': ['remote_url', 'local_file']
+                        }
+                    },
+                    {
+                        'label': 'Files',
+                        'variable': 'files',
+                        'required': True,
+                        'max_length': 3, # 最大数量限制
+                        'allowed_file_types': ['image', 'document', 'audio', 'video'],
+                            'allowed_file_extensions': [...]
+                        },
+                        "type": "file-list"
+                    }
+                ],
+                "system_parameters": {
+                    "file_size_limit": 15,
+                    "image_file_size_limit": 10,
+                    "audio_file_size_limit": 50,
+                    "video_file_size_limit": 100
+                }
+            }
             ```
         """
-        return self.get("parameters", **kwargs)
+        params = self.get("parameters", **kwargs)
+        
+        # 对user_input_form进行处理，使其变成一个列表
+        user_input_form = []
+        for item in params["user_input_form"]:
+            for form_type in item:
+                type_item = item[form_type]
+                type_item['type'] = form_type
+                if form_type in ['file', 'file-list']:
+                    allowed_file_extensions = []
+                    if 'custom' not in type_item['allowed_file_types']:
+                        for allowed_file_type in type_item['allowed_file_types']:
+                            allowed_file_extensions.extend(self.ALLOWED_FILE_EXTENSIONS[allowed_file_type])
+                    else:
+                        allowed_file_extensions = type_item['allowed_file_extensions']
+                    type_item['allowed_file_extensions'] = allowed_file_extensions
+                user_input_form.append(type_item)
+        params["user_input_form"] = user_input_form
+        
+        return params
 
     def get_conversations(
         self,
@@ -810,5 +906,4 @@ def analyze_app_capabilities(client):
     
     return params
 
-# 使用示例
-app_params = analyze_app_capabilities(client)
+

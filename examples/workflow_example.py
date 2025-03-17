@@ -72,7 +72,14 @@ def example_get_app_info():
 
         traceback.print_exc()
         return None
-
+    
+def example_get_app_parameters():
+    """获取应用参数示例"""
+    print("\n==== 获取应用参数 ====")
+    request_kwargs = get_request_kwargs()
+    params = client.get_parameters(**request_kwargs)
+    pprint(params)
+    return params
 
 def example_run_workflow_blocking():
     """以阻塞模式运行工作流示例"""
@@ -374,7 +381,7 @@ if __name__ == "__main__":
     try:
         # 运行基本示例
         example_get_app_info()
-
+        example_get_app_parameters()
         # 如果是Workflow应用，或者用户选择继续运行，则执行以下示例
         example_run_workflow_blocking()
         example_run_workflow_streaming()
