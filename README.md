@@ -840,13 +840,21 @@ client = WorkflowClient(
 app_info = client.get_app_info()
 print(f"应用名称: {app_info['name']}")
 
-# 阻塞模式执行工作流
+# 准备输入参数
+inputs = {
+    "input": "请写一首关于人工智能的诗",
+}
+
+# 执行工作流（阻塞模式）
 result = client.run(
-    inputs={"prompt": "请给我讲一个关于AI的故事"},
-    user="user_123",  # 用户唯一标识
-    response_mode="blocking"  # 阻塞模式，等待工作流执行完成
+    inputs=inputs,
+    user="user_123",  # 用户标识
+    response_mode="blocking",
+    timeout=30,  # 超时时间(秒)
 )
-print(f"工作流结果: {result}")
+
+print("工作流执行结果:")
+print(result)
 ```
 
 #### 流式响应处理
@@ -915,12 +923,6 @@ for log in logs["data"]:
 ```
 
 更多示例请参阅 [examples/workflow_example.py](examples/workflow_example.py)。
-
-## 开发中功能
-
-- Agent 对话型应用客户端
-- Text Generation 文本生成应用客户端
-- Chatflow 工作流编排对话型应用客户端
 
 ## 贡献
 

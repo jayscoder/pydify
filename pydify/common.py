@@ -522,6 +522,8 @@ class DifyBaseClient:
         Returns:
             Dict[str, Any]: 应用参数配置
 
+       
+
         Raises:
             DifyAPIError: 当API请求失败时
         """
