@@ -3,7 +3,8 @@ import os
 import setuptools
 
 # 优先读取README.rst，如果不存在则读取README.md
-readme_file = "README.rst" if os.path.exists("README.rst") else "README.md"
+# readme_file = "README.rst" if os.path.exists("README.rst") else "README.md"
+readme_file = "README.md"
 with open(readme_file, "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
@@ -32,13 +33,13 @@ extras_require = {
 
 setuptools.setup(
     name="pydify",
-    version="0.1.3",
+    version="0.1.4",
     author="Dify SDK Team",
     author_email="example@domain.com",
     description="A Python SDK for interacting with Dify API",
     long_description=long_description,
     long_description_content_type=long_description_content_type,
-    url="https://github.com/yourusername/pydify",
+    url="https://github.com/jayscoder/pydify",
     packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",

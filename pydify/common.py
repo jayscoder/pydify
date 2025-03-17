@@ -668,7 +668,7 @@ class DifyBaseClient:
 
         if raw:
             return params
-        
+
         # 对user_input_form进行处理，使其变成一个列表
         user_input_form = []
         for item in params["user_input_form"]:
