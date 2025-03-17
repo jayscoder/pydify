@@ -32,7 +32,7 @@ extras_require = {
 
 setuptools.setup(
     name="pydify",
-    version="0.1.2",
+    version="0.1.3",
     author="Dify SDK Team",
     author_email="example@domain.com",
     description="A Python SDK for interacting with Dify API",

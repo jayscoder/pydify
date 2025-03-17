@@ -72,7 +72,8 @@ def example_get_app_info():
 
         traceback.print_exc()
         return None
-    
+
+
 def example_get_app_parameters():
     """获取应用参数示例"""
     print("\n==== 获取应用参数 ====")
@@ -80,6 +81,7 @@ def example_get_app_parameters():
     params = client.get_parameters(**request_kwargs)
     pprint(params)
     return params
+
 
 def example_run_workflow_blocking():
     """以阻塞模式运行工作流示例"""

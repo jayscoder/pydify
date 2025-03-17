@@ -515,23 +515,39 @@ class DifyBaseClient:
         """
         return self.get("info")
 
-    
     ALLOWED_FILE_EXTENSIONS = {
-        'image': ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'],
-        'document': ['.txt', '.md', '.markdown', '.pdf', '.html', '.xlsx', '.xls', '.docx', '.csv', '.eml', '.msg', '.pptx', '.ppt', '.xml', '.epub'],
-        'audio': ['.mp3', '.m4a', '.wav', '.webm', '.amr'],
-        'video': ['.mp4', '.mov', '.mpeg', '.mpga']
+        "image": [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"],
+        "document": [
+            ".txt",
+            ".md",
+            ".markdown",
+            ".pdf",
+            ".html",
+            ".xlsx",
+            ".xls",
+            ".docx",
+            ".csv",
+            ".eml",
+            ".msg",
+            ".pptx",
+            ".ppt",
+            ".xml",
+            ".epub",
+        ],
+        "audio": [".mp3", ".m4a", ".wav", ".webm", ".amr"],
+        "video": [".mp4", ".mov", ".mpeg", ".mpga"],
     }
-    
-    def get_parameters(self, **kwargs) -> Dict[str, Any]:
+
+    def get_parameters(self, raw: bool = False, **kwargs) -> Dict[str, Any]:
         """
         获取应用参数，包括功能开关、输入参数配置、文件上传限制等。
-        
+
         此方法通常用于应用初始化阶段，获取应用的各种配置参数和功能开关状态。
-        
+
         Args:
+            raw (bool): 是否返回原始数据，默认返回处理后的数据
             **kwargs: 额外的请求参数，如timeout、max_retries等
-        
+
         Returns:
             Dict[str, Any]: 包含应用参数的字典，可能包含以下字段：
                 - opening_statement (str): 应用开场白文本
@@ -567,7 +583,7 @@ class DifyBaseClient:
                             - custom: 自定义文件类型
                         - allowed_file_extensions (List[str]): 允许的文件后缀列表
                             (仅当allowed_file_types为custom时需要配置)
-                            - document类型包含: 'TXT', 'MD', 'MARKDOWN', 'PDF', 'HTML', 'XLSX', 
+                            - document类型包含: 'TXT', 'MD', 'MARKDOWN', 'PDF', 'HTML', 'XLSX',
                               'XLS', 'DOCX', 'CSV', 'EML', 'MSG', 'PPTX', 'PPT', 'XML', 'EPUB'
                             - image类型包含: 'JPG', 'JPEG', 'PNG', 'GIF', 'WEBP', 'SVG'
                             - audio类型包含: 'MP3', 'M4A', 'WAV', 'WEBM', 'AMR'
@@ -582,18 +598,18 @@ class DifyBaseClient:
                     - video_file_size_limit (int): 视频上传大小限制(MB)
         Raises:
             DifyAPIError: 当API请求失败时
-        
+
         Example:
             ```python
             # 获取应用参数
             params = client.get_parameters()
-            
+
             # 示例返回数据:
             {
                 "user_input_form": [
                     {
                         "label": "Query",
-                        "variable": "query", 
+                        "variable": "query",
                         "required": true,
                         "max_length": 1000, # 最大长度限制
                         "type": "paragraph"
@@ -649,24 +665,29 @@ class DifyBaseClient:
             ```
         """
         params = self.get("parameters", **kwargs)
+
+        if raw:
+            return params
         
         # 对user_input_form进行处理，使其变成一个列表
         user_input_form = []
         for item in params["user_input_form"]:
             for form_type in item:
                 type_item = item[form_type]
-                type_item['type'] = form_type
-                if form_type in ['file', 'file-list']:
+                type_item["type"] = form_type
+                if form_type in ["file", "file-list"]:
                     allowed_file_extensions = []
-                    if 'custom' not in type_item['allowed_file_types']:
-                        for allowed_file_type in type_item['allowed_file_types']:
-                            allowed_file_extensions.extend(self.ALLOWED_FILE_EXTENSIONS[allowed_file_type])
+                    if "custom" not in type_item["allowed_file_types"]:
+                        for allowed_file_type in type_item["allowed_file_types"]:
+                            allowed_file_extensions.extend(
+                                self.ALLOWED_FILE_EXTENSIONS[allowed_file_type]
+                            )
                     else:
-                        allowed_file_extensions = type_item['allowed_file_extensions']
-                    type_item['allowed_file_extensions'] = allowed_file_extensions
+                        allowed_file_extensions = type_item["allowed_file_extensions"]
+                    type_item["allowed_file_extensions"] = allowed_file_extensions
                 user_input_form.append(type_item)
         params["user_input_form"] = user_input_form
-        
+
         return params
 
     def get_conversations(
@@ -844,14 +865,15 @@ class DifyAPIError(Exception):
             return f"[{self.status_code}] {self.message}"
         return self.message
 
+
 def analyze_app_capabilities(client):
     """分析应用的功能和配置"""
     # 获取应用参数
     params = client.get_parameters()
-    
+
     # 基本信息
     print("=== 应用功能配置分析 ===")
-    
+
     # 检查基本功能
     features = []
     if "opening_statement" in params and params["opening_statement"]:
@@ -866,9 +888,9 @@ def analyze_app_capabilities(client):
         features.append("引用和归属")
     if params.get("annotation_reply", {}).get("enabled"):
         features.append("标记回复")
-        
+
     print(f"启用的功能: {', '.join(features) if features else '无特殊功能'}")
-    
+
     # 检查表单配置
     if "user_input_form" in params:
         form_types = []
@@ -877,33 +899,35 @@ def analyze_app_capabilities(client):
             for form_type in item:
                 form_types.append(form_type)
                 variables.append(item[form_type].get("variable"))
-        
+
         print(f"\n表单配置: 共{len(params['user_input_form'])}个控件")
         print(f"控件类型: {', '.join(form_types)}")
         print(f"变量名列表: {', '.join(variables)}")
-    
+
     # 检查文件上传能力
     if "file_upload" in params:
         upload_types = []
         for upload_type, config in params["file_upload"].items():
             if config.get("enabled"):
                 upload_types.append(upload_type)
-        
+
         if upload_types:
             print(f"\n支持上传文件类型: {', '.join(upload_types)}")
-            
+
             # 详细的图片上传配置
-            if "image" in params["file_upload"] and params["file_upload"]["image"].get("enabled"):
+            if "image" in params["file_upload"] and params["file_upload"]["image"].get(
+                "enabled"
+            ):
                 img_config = params["file_upload"]["image"]
                 print(f"图片上传限制: 最多{img_config.get('number_limits', 0)}张")
-                print(f"支持的传输方式: {', '.join(img_config.get('transfer_methods', []))}")
-    
+                print(
+                    f"支持的传输方式: {', '.join(img_config.get('transfer_methods', []))}"
+                )
+
     # 检查系统参数
     if "system_parameters" in params:
         print("\n系统参数限制:")
         for param, value in params["system_parameters"].items():
             print(f"- {param}: {value}MB")
-    
+
     return params
-
-

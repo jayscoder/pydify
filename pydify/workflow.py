@@ -27,7 +27,7 @@ class WorkflowClient(DifyBaseClient):
     ) -> Union[Dict[str, Any], Generator[Dict[str, Any], None, None]]:
         """
         执行工作流。
-        
+
         Args:
             inputs (Dict[str, Any]): 必需参数。包含工作流所需的输入变量键值对。
                                    每个键对应一个变量名称,值为该变量的具体内容。
@@ -37,7 +37,7 @@ class WorkflowClient(DifyBaseClient):
             response_mode (str, optional): 响应模式，'streaming'（流式）或'blocking'（阻塞）。默认为'streaming'。
             files (List[Dict[str, Any]], optional): 文件列表，每个文件为一个字典，包含以下字段：
                 - type (str): 文件类型，支持:
-                    - document: 支持'TXT', 'MD', 'MARKDOWN', 'PDF', 'HTML', 'XLSX', 'XLS', 
+                    - document: 支持'TXT', 'MD', 'MARKDOWN', 'PDF', 'HTML', 'XLSX', 'XLS',
                               'DOCX', 'CSV', 'EML', 'MSG', 'PPTX', 'PPT', 'XML', 'EPUB'
                     - image: 支持'JPG', 'JPEG', 'PNG', 'GIF', 'WEBP', 'SVG'
                     - audio: 支持'MP3', 'M4A', 'WAV', 'WEBM', 'AMR'
@@ -69,7 +69,7 @@ class WorkflowClient(DifyBaseClient):
             inputs = {
                 "document": {
                     "type": "document",
-                    "transfer_method": "remote_url", 
+                    "transfer_method": "remote_url",
                     "url": "https://example.com/doc.pdf"
                 }
             }
