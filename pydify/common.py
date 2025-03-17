@@ -379,29 +379,38 @@ class DifyBaseClient:
 
     # 通用方法 - 这些方法在多个子类中重复出现，可以移到基类
 
-    def upload_file(self, file_path: str, user: str) -> Dict[str, Any]:
+    def upload_file(self, file_path: str, user: str, **kwargs) -> Dict[str, Any]:
         """
         上传文件到Dify API。
 
         Args:
             file_path (str): 要上传的文件路径
             user (str): 用户标识
-
+            **kwargs: 额外的请求参数，如timeout、max_retries等
         Returns:
             Dict[str, Any]: 上传文件的响应数据
 
         Raises:
             FileNotFoundError: 当文件不存在时
-            DifyAPIError: 当API请求失败时
+            DifyAPIError: 当API请求失败时，可能的错误包括：
+                - 400 no_file_uploaded: 必须提供文件
+                - 400 too_many_files: 目前只接受一个文件
+                - 400 unsupported_preview: 该文件不支持预览
+                - 400 unsupported_estimate: 该文件不支持估算
+                - 413 file_too_large: 文件太大
+                - 415 unsupported_file_type: 不支持的扩展名，当前只接受文档类文件
+                - 503 s3_connection_failed: 无法连接到 S3 服务
+                - 503 s3_permission_denied: 无权限上传文件到 S3
+                - 503 s3_file_too_large: 文件超出 S3 大小限制
         """
         if not os.path.exists(file_path):
-            raise FileNotFoundError(f"File not found: {file_path}")
+            raise FileNotFoundError(f"文件未找到: {file_path}")
 
         with open(file_path, "rb") as file:
-            return self.upload_file_obj(file, os.path.basename(file_path), user)
+            return self.upload_file_obj(file, os.path.basename(file_path), user, **kwargs)
 
     def upload_file_obj(
-        self, file_obj: BinaryIO, filename: str, user: str
+        self, file_obj: BinaryIO, filename: str, user: str, **kwargs
     ) -> Dict[str, Any]:
         """
         使用文件对象上传文件到Dify API。
@@ -410,25 +419,100 @@ class DifyBaseClient:
             file_obj (BinaryIO): 文件对象
             filename (str): 文件名
             user (str): 用户标识
+            **kwargs: 额外的请求参数，如timeout、max_retries等
 
         Returns:
-            Dict[str, Any]: 上传文件的响应数据
-
+            Dict[str, Any]: 上传文件的响应数据，包含以下字段：
+                - id (str): 文件ID
+                - name (str): 文件名
+                - size (int): 文件大小（字节）
+                - extension (str): 文件扩展名
+                - mime_type (str): 文件MIME类型
+                - created_at (int): 创建时间戳
+                - created_by (uuid): 创建者ID
+            例子:
+            ```
+            {
+                'created_at': 1742181534,
+                'created_by': 'df217b97-2203-4fb9-a4b6-ebe74ac6a315',
+                'extension': 'png',
+                'id': '88fb21ea-e0b9-48a9-a315-e44e6cfcbcb7',
+                'mime_type': 'image/png',
+                'name': 'test_image.png',
+                'size': 289
+            }
+            ```
+        
         Raises:
-            DifyAPIError: 当API请求失败时
+            DifyAPIError: 当API请求失败时，可能的错误包括：
+                - 400 bad_request_key_error: 请求格式错误
+                - 400 no_file_uploaded: 必须提供文件
+                - 413 file_too_large: 文件太大
+                - 415 unsupported_file_type: 不支持的文件类型
         """
-        files = {"file": (filename, file_obj)}
-        data = {"user": user}
-
-        headers = self._get_headers()
-        # 移除Content-Type，让requests自动设置multipart/form-data
-        headers.pop("Content-Type", None)
-
-        response = self._request(
-            "POST", "files/upload", headers=headers, files=files, data=data
-        )
-        return response.json()
-
+        # 根据文件扩展名推断MIME类型
+        import mimetypes
+        mime_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+        
+        # 直接使用requests库进行请求，而不是通过_request方法
+        try:
+            url = urljoin(self.base_url, "files/upload")
+            
+            # 打印调试信息
+            print(f"文件上传请求URL: {url}")
+            print(f"文件名: {filename}, MIME类型: {mime_type}")
+            
+            # 准备请求头（不包含Content-Type，让requests自动处理)
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+            }
+            
+            # 准备文件和表单数据
+            files = {
+                "file": (filename, file_obj, mime_type)
+            }
+            data = {
+                "user": user
+            }
+            
+            # 设置超时参数
+            timeout = kwargs.pop("timeout", 30)
+            
+            # 直接发送请求
+            response = requests.post(
+                url, 
+                headers=headers, 
+                files=files, 
+                data=data,
+                timeout=timeout,
+            )
+            
+            # 检查响应状态
+            if not response.ok:
+                error_msg = f"API request failed: {response.status_code}"
+                error_data = {}
+                try:
+                    error_data = response.json()
+                    error_msg = f"{error_msg} - {json.dumps(error_data)}"
+                except:
+                    if response.text:
+                        error_msg = f"{error_msg} - {response.text[:100]}"
+                
+                raise DifyAPIError(
+                    error_msg, 
+                    status_code=response.status_code,
+                    error_data=error_data
+                )
+            
+            return response.json()
+        
+        except requests.RequestException as e:
+            raise DifyAPIError(f"文件上传网络错误: {str(e)}")
+        except Exception as e:
+            if isinstance(e, DifyAPIError):
+                raise
+            raise DifyAPIError(f"文件上传失败: {str(e)}")
+    
     def text_to_audio(
         self,
         user: str,
@@ -665,7 +749,7 @@ class DifyBaseClient:
             ```
         """
         params = self.get("parameters", **kwargs)
-
+        
         if raw:
             return params
 
@@ -862,7 +946,7 @@ class DifyAPIError(Exception):
 
     def __str__(self) -> str:
         if self.status_code:
-            return f"[{self.status_code}] {self.message}"
+            return f"[{self.status_code}] {self.message} {self.error_data}"
         return self.message
 
 

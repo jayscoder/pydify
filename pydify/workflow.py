@@ -138,57 +138,7 @@ class WorkflowClient(DifyBaseClient):
         endpoint = f"workflows/tasks/{task_id}/stop"
         payload = {"user": user}
         return self.post(endpoint, json_data=payload, **kwargs)
-
-    def upload_file(self, file_path: str, user: str) -> Dict[str, Any]:
-        """
-        上传文件到Dify API。
-
-        Args:
-            file_path (str): 要上传的文件路径
-            user (str): 用户标识
-
-        Returns:
-            Dict[str, Any]: 上传文件的响应数据
-
-        Raises:
-            FileNotFoundError: 当文件不存在时
-            requests.HTTPError: 当API请求失败时
-        """
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"File not found: {file_path}")
-
-        return super().upload_file(file_path, user)
-
-    def upload_file_obj(
-        self, file_obj: BinaryIO, filename: str, user: str
-    ) -> Dict[str, Any]:
-        """
-        上传文件对象到Dify API。
-
-        Args:
-            file_obj (BinaryIO): 文件对象
-            filename (str): 文件名
-            user (str): 用户标识
-
-        Returns:
-            Dict[str, Any]: 上传文件的响应数据
-
-        Raises:
-            requests.HTTPError: 当API请求失败时
-        """
-        files = {"file": (filename, file_obj)}
-        data = {"user": user}
-        url = os.path.join(self.base_url, "files/upload")
-
-        headers = self._get_headers()
-        # 移除Content-Type，让requests自动设置multipart/form-data
-        headers.pop("Content-Type", None)
-
-        response = self._request(
-            "POST", "files/upload", headers=headers, files=files, data=data
-        )
-        return response.json()
-
+    
     def get_logs(
         self,
         keyword: str = None,

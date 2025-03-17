@@ -87,14 +87,38 @@ def example_run_workflow_blocking():
     """以阻塞模式运行工作流示例"""
     print("\n==== 以阻塞模式运行工作流 ====")
 
+    file = 'example.txt'
+    if not os.path.exists(file):
+        with open(file, 'w') as f:
+            f.write('这是一个测试文件，用于演示 Dify API 的文件上传功能。')
+    
+    file_id = client.upload_file(file, USER_ID)['id']
+    
     # 准备输入参数
     inputs = {
         "input": "请写一首关于人工智能的诗",
+        'file1': {
+                'type': 'document',
+                'transfer_method': 'local_file',
+                'upload_file_id': file_id
+            },
+        'files1': [
+            {
+                'type': 'document',
+                'transfer_method': 'local_file',
+                'upload_file_id': file_id
+            },
+            {
+                'type': 'document',
+                'transfer_method': 'local_file',
+                'upload_file_id': file_id
+            }
+        ]
     }
-
+    
     # 获取请求参数
     request_kwargs = get_request_kwargs()
-
+    
     try:
         # 执行工作流（阻塞模式）
         result = client.run(
@@ -103,7 +127,7 @@ def example_run_workflow_blocking():
             response_mode="blocking",
             **request_kwargs,  # 传递请求参数
         )
-
+        
         print("工作流执行结果:")
         pprint(result)
         return result
@@ -182,23 +206,94 @@ def example_run_workflow_streaming():
 def example_upload_file():
     """上传文件示例"""
     print("\n==== 上传文件 ====")
-
-    # 确保文件存在
-    file_path = "example.txt"
-    if not os.path.exists(file_path):
-        with open(file_path, "w") as f:
-            f.write("这是一个测试文件，用于演示 Dify API 的文件上传功能。")
-
-    # 上传文件
+    
+    # 获取请求参数
+    request_kwargs = get_request_kwargs()
+    
     try:
-        result = client.upload_file(file_path, USER_ID)
+        # 1. 首先检查应用参数配置
+        params = client.get_parameters(**request_kwargs)
+        
+        # 创建一个带有特定内容的测试文件
+        file_path = "example.txt"
+        if not os.path.exists(file_path):
+            with open(file_path, "w") as f:
+                f.write("这是一个测试文件，用于演示 Dify API 的文件上传功能。")
+        
+        # 检查文件大小
+        file_size = os.path.getsize(file_path) / (1024 * 1024)  # 转换为MB
+        print(f"文件大小: {file_size:.2f}MB")
+        
+        system_params = params.get("system_parameters", {})
+        file_size_limit = system_params.get("file_size_limit", 15)  # 默认15MB
+        
+        print(f"系统文件上传限制: {file_size_limit}MB")
+        
+        if file_size > file_size_limit:
+            print(f"警告: 文件大小({file_size:.2f}MB)超过限制({file_size_limit}MB)")
+        
+        # 打印调试信息
+        print(f"API地址: {client.base_url}")
+        print(f"API密钥前缀: {client.api_key[:8]}...")
+        
+        # 尝试创建一个图片文件（某些API可能只接受图片）
+        try_image = True
+        if try_image:
+            print("创建测试图片文件...")
+            image_path = "test_image.png"
+            from PIL import Image
+            import numpy as np
+            
+            # 创建一个简单的彩色图片
+            try:
+                img = Image.new('RGB', (100, 100), color=(73, 109, 137))
+                img.save(image_path)
+                print(f"已创建测试图片: {image_path}")
+                file_path = image_path
+            except ImportError:
+                print("无法创建图片文件，将使用文本文件")
+            except Exception as e:
+                print(f"创建图片失败: {e}")
+        
+        # 上传文件，添加超时和重试参数
+        print(f"正在上传文件: {file_path}")
+        
+        # 增加超时时间，避免大文件上传超时
+        request_kwargs["timeout"] = 60
+        
+        result = client.upload_file(
+            file_path, 
+            USER_ID,
+            **request_kwargs  # 传递请求参数
+        )
+        
         print("文件上传成功:")
         pprint(result)
-
+        
         # 返回上传的文件ID，可用于后续调用
         return result.get("id")
     except Exception as e:
         print(f"文件上传失败: {e}")
+        
+        # 添加更详细的错误分析
+        if "400" in str(e):
+            print("\n可能的原因:")
+            print("1. API密钥权限不足 - 确保您的密钥有文件上传权限")
+            print("2. 应用模式不支持 - 确认您的应用是Workflow模式且支持文件操作")
+            print("3. 文件格式不支持 - 尝试上传其他格式的文件，如PDF或图片")
+            print("4. API地址不正确 - 检查BASE_URL是否正确")
+            
+            # 尝试获取支持的文件类型
+            try:
+                if "file_upload" in params:
+                    print("\n支持的文件上传配置:")
+                    pprint(params.get("file_upload", {}))
+            except:
+                pass
+        
+        # 打印完整错误堆栈
+        import traceback
+        traceback.print_exc()
         return None
 
 
@@ -384,11 +479,12 @@ if __name__ == "__main__":
         # 运行基本示例
         example_get_app_info()
         example_get_app_parameters()
+        example_upload_file()
         # 如果是Workflow应用，或者用户选择继续运行，则执行以下示例
         example_run_workflow_blocking()
-        example_run_workflow_streaming()
-        example_get_logs()
-
+        # example_run_workflow_streaming()
+        # example_get_logs()
+        
         # 运行文件相关示例和停止任务示例默认不启用
         # if is_workflow_app:
         #    example_workflow_with_file()
