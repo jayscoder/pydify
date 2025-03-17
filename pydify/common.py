@@ -407,7 +407,9 @@ class DifyBaseClient:
             raise FileNotFoundError(f"文件未找到: {file_path}")
 
         with open(file_path, "rb") as file:
-            return self.upload_file_obj(file, os.path.basename(file_path), user, **kwargs)
+            return self.upload_file_obj(
+                file, os.path.basename(file_path), user, **kwargs
+            )
 
     def upload_file_obj(
         self, file_obj: BinaryIO, filename: str, user: str, **kwargs
@@ -442,7 +444,7 @@ class DifyBaseClient:
                 'size': 289
             }
             ```
-        
+
         Raises:
             DifyAPIError: 当API请求失败时，可能的错误包括：
                 - 400 bad_request_key_error: 请求格式错误
@@ -452,41 +454,38 @@ class DifyBaseClient:
         """
         # 根据文件扩展名推断MIME类型
         import mimetypes
-        mime_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
-        
+
+        mime_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+
         # 直接使用requests库进行请求，而不是通过_request方法
         try:
             url = urljoin(self.base_url, "files/upload")
-            
+
             # 打印调试信息
             print(f"文件上传请求URL: {url}")
             print(f"文件名: {filename}, MIME类型: {mime_type}")
-            
+
             # 准备请求头（不包含Content-Type，让requests自动处理)
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
             }
-            
+
             # 准备文件和表单数据
-            files = {
-                "file": (filename, file_obj, mime_type)
-            }
-            data = {
-                "user": user
-            }
-            
+            files = {"file": (filename, file_obj, mime_type)}
+            data = {"user": user}
+
             # 设置超时参数
             timeout = kwargs.pop("timeout", 30)
-            
+
             # 直接发送请求
             response = requests.post(
-                url, 
-                headers=headers, 
-                files=files, 
+                url,
+                headers=headers,
+                files=files,
                 data=data,
                 timeout=timeout,
             )
-            
+
             # 检查响应状态
             if not response.ok:
                 error_msg = f"API request failed: {response.status_code}"
@@ -497,22 +496,20 @@ class DifyBaseClient:
                 except:
                     if response.text:
                         error_msg = f"{error_msg} - {response.text[:100]}"
-                
+
                 raise DifyAPIError(
-                    error_msg, 
-                    status_code=response.status_code,
-                    error_data=error_data
+                    error_msg, status_code=response.status_code, error_data=error_data
                 )
-            
+
             return response.json()
-        
+
         except requests.RequestException as e:
             raise DifyAPIError(f"文件上传网络错误: {str(e)}")
         except Exception as e:
             if isinstance(e, DifyAPIError):
                 raise
             raise DifyAPIError(f"文件上传失败: {str(e)}")
-    
+
     def text_to_audio(
         self,
         user: str,
@@ -749,7 +746,7 @@ class DifyBaseClient:
             ```
         """
         params = self.get("parameters", **kwargs)
-        
+
         if raw:
             return params
 

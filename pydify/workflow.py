@@ -138,7 +138,7 @@ class WorkflowClient(DifyBaseClient):
         endpoint = f"workflows/tasks/{task_id}/stop"
         payload = {"user": user}
         return self.post(endpoint, json_data=payload, **kwargs)
-    
+
     def get_logs(
         self,
         keyword: str = None,
