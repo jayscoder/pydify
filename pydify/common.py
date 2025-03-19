@@ -26,35 +26,36 @@ from requests.exceptions import JSONDecodeError as RequestsJSONDecodeError
 
 class DifyType:
     """Dify应用类型枚举
-    
+
     Dify平台支持多种类型的应用，每种类型有不同的API端点和功能。
     此类定义了所有支持的应用类型常量，用于客户端类型标识。
     """
-    Workflow = 'workflow'
-    Chatbot = 'chatbot'
-    Chatflow = 'chatflow'
-    Agent = 'agent'
-    TextGeneration = 'text_generation'
-    
+
+    Workflow = "workflow"
+    Chatbot = "chatbot"
+    Chatflow = "chatflow"
+    Agent = "agent"
+    TextGeneration = "text_generation"
+
 
 class DifyBaseClient:
     """Dify API 基础客户端类。
 
     提供与Dify API进行交互的基本功能，包括身份验证、HTTP请求和通用方法。
     各种特定应用类型的客户端都继承自此类，以重用共同的功能。
-    
+
     主要功能:
     - HTTP请求处理 (GET/POST/流式请求)
     - 错误处理和重试机制
     - 文件上传
     - 用户会话管理
     - 消息反馈功能
-    
+
     子类应设置适当的type属性，并根据需要实现特定的API方法。
     """
 
     type = None
-    
+
     def __init__(self, api_key: str, base_url: str = None):
         """
         初始化Dify API客户端。
@@ -65,13 +66,15 @@ class DifyBaseClient:
             base_url (str, optional): API基础URL。如果未提供，则使用默认的Dify API地址。
                                     可以设置为自托管Dify实例的URL。
                                     也可以通过DIFY_BASE_URL环境变量设置。
-        
+
         注意:
             - API密钥应当保密，不要在客户端代码中硬编码
             - 对于自托管实例，确保base_url格式正确，通常以/v1结尾
         """
         self.api_key = api_key
-        self.base_url = base_url or os.environ.get("DIFY_BASE_URL") or "https://api.dify.ai/v1"
+        self.base_url = (
+            base_url or os.environ.get("DIFY_BASE_URL") or "https://api.dify.ai/v1"
+        )
 
         # 如果base_url不以斜杠结尾，则添加斜杠
         if not self.base_url.endswith("/"):
@@ -115,7 +118,7 @@ class DifyBaseClient:
                 - status_code: HTTP状态码
                 - error_data: 服务器返回的错误数据
                 - 常见错误包括认证错误(401)、参数错误(400)、资源不存在(404)等
-            连接错误: 
+            连接错误:
                 - 网络连接问题
                 - SSL证书错误
                 - 超时
@@ -227,12 +230,12 @@ class DifyBaseClient:
 
         Raises:
             DifyAPIError: 当API请求失败时，包含详细的错误信息
-        
+
         示例:
             ```python
             # 获取应用信息
             app_info = client.get("app-info")
-            
+
             # 带参数的请求
             messages = client.get("messages", params={"conversation_id": "conv_123", "limit": 10})
             ```
@@ -272,7 +275,7 @@ class DifyBaseClient:
 
         Raises:
             DifyAPIError: 当API请求失败时，包含详细的错误信息
-        
+
         示例:
             ```python
             # 发送消息
@@ -317,7 +320,7 @@ class DifyBaseClient:
         Raises:
             DifyAPIError: 当API请求失败时
             网络错误: 连接问题、超时等
-        
+
         示例:
             ```python
             # 流式生成文本
@@ -326,7 +329,7 @@ class DifyBaseClient:
                 "user": "user_123",
                 "response_mode": "streaming"
             })
-            
+
             # 处理每个事件块
             for chunk in stream:
                 if "answer" in chunk:

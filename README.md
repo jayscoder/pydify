@@ -2,6 +2,10 @@
 
 Pydify 是一个用于与 Dify API 交互的 Python 客户端库。
 
+[![PyPI version](https://badge.fury.io/py/pydify.svg)](https://badge.fury.io/py/pydify)
+[![Python Versions](https://img.shields.io/pypi/pyversions/pydify.svg)](https://pypi.org/project/pydify)
+[![Downloads](https://pepy.tech/badge/pydify)](https://pepy.tech/project/pydify)
+
 ## 关于 Dify
 
 [Dify](https://github.com/langgenius/dify) 是一个开源的 LLM 应用开发平台，提供直观的界面将 AI 工作流、RAG 管道、代理能力、模型管理、可观察性功能等结合在一起，使您能够快速从原型转向生产环境。

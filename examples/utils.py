@@ -344,7 +344,7 @@ def run_example(example_fn: Callable, *args, **kwargs):
             print(f"{example_fn.__doc__.strip()}\n")
 
         return example_fn(*args, **kwargs)
-    
+
     except Exception as e:
         print(f"\n示例运行过程中发生错误: {e}")
         import traceback

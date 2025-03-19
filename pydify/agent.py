@@ -18,7 +18,8 @@ class AgentClient(DifyBaseClient):
 
     提供与Dify Agent应用API交互的方法，包括发送消息、获取历史消息、管理会话、
     上传文件、语音转文字、文字转语音等功能。Agent应用支持迭代式规划推理和自主工具调用。
-    """ 
+    """
+
     type = DifyType.Agent
 
     def send_message(
@@ -72,7 +73,7 @@ class AgentClient(DifyBaseClient):
         endpoint = "chat-messages"
 
         return self.post_stream(endpoint, json_data=payload, **kwargs)  # 传递额外参数
-    
+
     def stop_response(self, task_id: str, user: str) -> Dict[str, Any]:
         """
         停止正在进行的响应流。此方法仅在流式模式下有效。
@@ -94,8 +95,6 @@ class AgentClient(DifyBaseClient):
         endpoint = f"chat-messages/{task_id}/stop"
         payload = {"user": user}
         return self.post(endpoint, json_data=payload)
-
-    
 
     def get_meta(self) -> Dict[str, Any]:
         """

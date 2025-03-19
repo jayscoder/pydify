@@ -8,9 +8,10 @@ Pydify - Dify API的Python客户端库
 from .agent import AgentClient
 from .chatbot import ChatbotClient
 from .chatflow import ChatflowClient
+from .common import DifyBaseClient, DifyType
 from .text_generation import TextGenerationClient
 from .workflow import WorkflowClient
-from .common import DifyType, DifyBaseClient
+
 
 def create_client(type: str, base_url: str, api_key: str) -> DifyBaseClient:
     if type == DifyType.Workflow:

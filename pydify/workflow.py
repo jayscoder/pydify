@@ -16,9 +16,9 @@ class WorkflowClient(DifyBaseClient):
 
     提供与Dify Workflow应用API交互的方法，包括执行工作流、停止响应、上传文件和获取日志等功能。
     """
-    
+
     type = DifyType.Workflow
-    
+
     def run(
         self,
         inputs: Dict[str, Any],
@@ -29,16 +29,16 @@ class WorkflowClient(DifyBaseClient):
     ) -> Union[Dict[str, Any], Generator[Dict[str, Any], None, None]]:
         """
         执行工作流。
-        
+
         Args:
             inputs (Dict[str, Any]): 必需参数。包含工作流所需的输入变量键值对。
                                    每个键对应一个工作流定义中的变量名称，值为该变量的具体内容。
-                                   
+
                                    注意：根据API版本的不同，Dify API可能期望不同的参数格式：
                                    - 有些API版本要求使用 "inputs" 作为键
                                    - 有些API版本要求使用 "input" 作为键
                                    - 有些API版本期望直接提供扁平的输入结构
-                                   
+
                                    常见输入示例：
                                    ```
                                    # 简单文本输入
@@ -46,7 +46,7 @@ class WorkflowClient(DifyBaseClient):
                                        "prompt": "请给我写一首诗",
                                        "topic": "人工智能"
                                    }
-                                   
+
                                    # 包含更复杂结构的输入
                                    inputs = {
                                        "text_to_analyze": "这是一段需要分析的文本",
@@ -57,14 +57,14 @@ class WorkflowClient(DifyBaseClient):
                                        }
                                    }
                                    ```
-                                   
+
             user (str): 用户标识，用于跟踪和区分不同用户的请求
-            
+
             response_mode (str, optional): 响应模式:
                 - 'streaming'（流式）: 实时获取工作流执行过程和结果，适合长时间运行的任务
                 - 'blocking'（阻塞）: 等待工作流完全执行完毕后返回结果，适合简短任务
                 默认为'streaming'。
-                
+
             files (List[Dict[str, Any]], optional): 文件列表，每个文件为一个字典，包含以下字段：
                 - type (str): 文件类型，支持:
                     - document: 支持'TXT', 'MD', 'MARKDOWN', 'PDF', 'HTML', 'XLSX', 'XLS',
@@ -78,7 +78,7 @@ class WorkflowClient(DifyBaseClient):
                     - 'local_file': 使用之前通过upload_file上传的文件ID
                 - url (str): 文件的URL地址（仅当transfer_method为'remote_url'时需要）
                 - upload_file_id (str): 上传文件ID（仅当transfer_method为'local_file'时需要）
-                
+
                 示例:
                 ```
                 [
@@ -94,7 +94,7 @@ class WorkflowClient(DifyBaseClient):
                     }
                 ]
                 ```
-                
+
             **kwargs: 额外的请求参数:
                 - timeout (int): 请求超时时间(秒)，默认为30秒
                 - max_retries (int): 网络错误时的最大重试次数，默认为2次
@@ -103,7 +103,7 @@ class WorkflowClient(DifyBaseClient):
             Union[Dict[str, Any], Generator[Dict[str, Any], None, None]]:
                 如果response_mode为'blocking'，返回完整响应字典，包含工作流执行结果;
                 如果response_mode为'streaming'，返回一个字典生成器，实时提供工作流执行状态。
-                
+
                 阻塞模式返回示例:
                 ```
                 {
@@ -117,7 +117,7 @@ class WorkflowClient(DifyBaseClient):
                     "ended_at": 1617979575
                 }
                 ```
-                
+
                 流式模式返回的每个事件示例:
                 ```
                 {
