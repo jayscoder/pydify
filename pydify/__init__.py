@@ -13,9 +13,9 @@ from .workflow import WorkflowClient
 from .common import DifyType, DifyBaseClient
 
 def create_client(type: str, base_url: str, api_key: str) -> DifyBaseClient:
-    if type == "workflow":
+    if type == DifyType.Workflow:
         return WorkflowClient(base_url=base_url, api_key=api_key)
-    elif type == "chatbot":
+    elif type == DifyType.Chatbot:
         return ChatbotClient(base_url=base_url, api_key=api_key)
     elif type == "chatflow":
         return ChatflowClient(base_url=base_url, api_key=api_key)
@@ -27,7 +27,7 @@ def create_client(type: str, base_url: str, api_key: str) -> DifyBaseClient:
         raise ValueError(f"Invalid client type: {type}")
 
 
-__version__ = "1.0.2"
+__version__ = "2.0.0"
 __all__ = [
     "WorkflowClient",
     "ChatbotClient",
