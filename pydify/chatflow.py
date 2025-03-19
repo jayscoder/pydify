@@ -97,61 +97,27 @@ class ChatflowClient(DifyBaseClient):
         payload = {"user": user}
         return self.post(endpoint, json_data=payload)
 
-    def message_feedback(
-        self,
-        message_id: str,
-        user: str,
-        rating: str = None,
-        content: str = None,
-    ) -> Dict[str, Any]:
-        """
-        对消息进行反馈（点赞/点踩）。
-
-        Args:
-            message_id (str): 消息ID
-            user (str): 用户标识
-            rating (str, optional): 评价，可选值：'like'(点赞), 'dislike'(点踩), None(撤销)。默认为None
-            content (str, optional): 反馈的具体信息。默认为None
-
-        Returns:
-            Dict[str, Any]: 反馈结果
-
-        Raises:
-            ValueError: 当提供了无效的参数时
-            requests.HTTPError: 当API请求失败时
-        """
-        if rating and rating not in ["like", "dislike", None]:
-            raise ValueError("rating must be 'like', 'dislike' or None")
-
-        endpoint = f"messages/{message_id}/feedbacks"
-
-        payload = {"user": user}
-
-        if rating is not None:
-            payload["rating"] = rating
-
-        if content:
-            payload["content"] = content
-
-        return self.post(endpoint, json_data=payload)
-
-    def get_suggested_questions(self, message_id: str, user: str) -> Dict[str, Any]:
+    def get_suggested_questions(self, message_id: str, user: str, **kwargs) -> Dict[str, Any]:
         """
         获取下一轮建议问题列表。
 
         Args:
             message_id (str): 消息ID
             user (str): 用户标识
+            **kwargs: 额外的请求参数，如timeout、max_retries等
 
         Returns:
             Dict[str, Any]: 建议问题列表
 
         Raises:
-            requests.HTTPError: 当API请求失败时
+            DifyAPIError: 当API请求失败时
         """
-        endpoint = f"messages/{message_id}/suggested"
-        params = {"user": user}
-        return self.get(endpoint, params=params)
+        params = {
+            "user": user,
+            "message_id": message_id,
+        }
+
+        return self.get("suggested-questions", params=params, **kwargs)
 
     def get_messages(
         self,
@@ -401,95 +367,6 @@ class ChatflowClient(DifyBaseClient):
             payload["text"] = text
 
         return self.post(endpoint, json_data=payload)
-
-    def upload_file(self, file_path: str, user: str) -> Dict[str, Any]:
-        """
-        上传文件到Dify API，可用于图文多模态理解。支持多种格式的文件。
-
-        Args:
-            file_path (str): 要上传的文件路径
-            user (str): 用户标识
-
-        Returns:
-            Dict[str, Any]: 上传文件的响应数据
-
-        Raises:
-            FileNotFoundError: 当文件不存在时
-            requests.HTTPError: 当API请求失败时
-        """
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"File not found: {file_path}")
-
-        # 获取MIME类型
-        mime_type, _ = mimetypes.guess_type(file_path)
-        if not mime_type:
-            mime_type = "application/octet-stream"
-
-        with open(file_path, "rb") as file:
-            files = {"file": file}
-            data = {"user": user}
-
-            headers = self._get_headers()
-            # 移除Content-Type，让requests自动设置multipart/form-data
-            headers.pop("Content-Type", None)
-
-            response = self._request(
-                "POST", "files/upload", headers=headers, files=files, data=data
-            )
-            return response.json()
-
-    def upload_file_obj(
-        self, file_obj: BinaryIO, filename: str, user: str
-    ) -> Dict[str, Any]:
-        """
-        使用文件对象上传文件到Dify API。
-
-        Args:
-            file_obj (BinaryIO): 文件对象
-            filename (str): 文件名
-            user (str): 用户标识
-
-        Returns:
-            Dict[str, Any]: 上传文件的响应数据
-
-        Raises:
-            requests.HTTPError: 当API请求失败时
-        """
-        files = {"file": (filename, file_obj)}
-        data = {"user": user}
-
-        headers = self._get_headers()
-        # 移除Content-Type，让requests自动设置multipart/form-data
-        headers.pop("Content-Type", None)
-
-        response = self._request(
-            "POST", "files/upload", headers=headers, files=files, data=data
-        )
-        return response.json()
-
-    def get_app_info(self) -> Dict[str, Any]:
-        """
-        获取应用基本信息。
-
-        Returns:
-            Dict[str, Any]: 应用信息，包含名称、描述和标签
-
-        Raises:
-            requests.HTTPError: 当API请求失败时
-        """
-        return self.get("info")
-
-    def get_parameters(self) -> Dict[str, Any]:
-        """
-        获取应用参数，包括功能开关、输入参数名称、类型及默认值等。
-
-        Returns:
-            Dict[str, Any]: 应用参数配置
-
-        Raises:
-            requests.HTTPError: 当API请求失败时
-        """
-        return self.get("parameters")
 
     def get_meta(self) -> Dict[str, Any]:
         """

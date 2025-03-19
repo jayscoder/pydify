@@ -25,7 +25,10 @@ from requests.exceptions import JSONDecodeError as RequestsJSONDecodeError
 
 
 class DifyType:
-    """Dify类型
+    """Dify应用类型枚举
+    
+    Dify平台支持多种类型的应用，每种类型有不同的API端点和功能。
+    此类定义了所有支持的应用类型常量，用于客户端类型标识。
     """
     Workflow = 'workflow'
     Chatbot = 'chatbot'
@@ -39,6 +42,15 @@ class DifyBaseClient:
 
     提供与Dify API进行交互的基本功能，包括身份验证、HTTP请求和通用方法。
     各种特定应用类型的客户端都继承自此类，以重用共同的功能。
+    
+    主要功能:
+    - HTTP请求处理 (GET/POST/流式请求)
+    - 错误处理和重试机制
+    - 文件上传
+    - 用户会话管理
+    - 消息反馈功能
+    
+    子类应设置适当的type属性，并根据需要实现特定的API方法。
     """
 
     type = None
@@ -48,11 +60,18 @@ class DifyBaseClient:
         初始化Dify API客户端。
 
         Args:
-            api_key (str): Dify API密钥
-            base_url (str, optional): API基础URL。如果未提供，则使用https://api.dify.ai/v1
+            api_key (str): Dify API密钥，可以从Dify平台的应用设置中获取。
+                          API密钥决定了权限范围和可访问的功能。
+            base_url (str, optional): API基础URL。如果未提供，则使用默认的Dify API地址。
+                                    可以设置为自托管Dify实例的URL。
+                                    也可以通过DIFY_BASE_URL环境变量设置。
+        
+        注意:
+            - API密钥应当保密，不要在客户端代码中硬编码
+            - 对于自托管实例，确保base_url格式正确，通常以/v1结尾
         """
         self.api_key = api_key
-        self.base_url = base_url or "https://api.dify.ai/v1"
+        self.base_url = base_url or os.environ.get("DIFY_BASE_URL") or "https://api.dify.ai/v1"
 
         # 如果base_url不以斜杠结尾，则添加斜杠
         if not self.base_url.endswith("/"):
@@ -63,7 +82,7 @@ class DifyBaseClient:
         获取API请求头。
 
         Returns:
-            Dict[str, str]: 包含认证信息的请求头
+            Dict[str, str]: 包含认证信息的请求头，用于API认证
         """
         return {
             "Authorization": f"Bearer {self.api_key}",
@@ -72,18 +91,35 @@ class DifyBaseClient:
 
     def _request(self, method: str, endpoint: str, **kwargs) -> requests.Response:
         """
-        发送HTTP请求到Dify API。
+        发送HTTP请求到Dify API并处理可能的错误。
+
+        此方法是所有API请求的核心，实现了错误处理、重试逻辑和超时控制。
+        所有其他HTTP方法（get, post等）都基于此方法。
 
         Args:
             method (str): HTTP方法 (GET, POST, PUT, DELETE)
-            endpoint (str): API端点
-            **kwargs: 传递给requests的其他参数
+            endpoint (str): API端点路径，相对于base_url
+            **kwargs: 传递给requests的其他参数，常用的包括:
+                - params: URL查询参数
+                - data: 表单数据
+                - json: JSON数据
+                - timeout: 请求超时时间(秒)
+                - max_retries: 最大重试次数
+                - retry_delay: 重试间隔(秒)
 
         Returns:
             requests.Response: 请求响应对象
 
         Raises:
-            DifyAPIError: 当HTTP请求失败时
+            DifyAPIError: 当HTTP请求失败时，包含详细的错误信息和可能的解决方案
+                - status_code: HTTP状态码
+                - error_data: 服务器返回的错误数据
+                - 常见错误包括认证错误(401)、参数错误(400)、资源不存在(404)等
+            连接错误: 
+                - 网络连接问题
+                - SSL证书错误
+                - 超时
+                - 服务器不可达
         """
         url = urljoin(self.base_url, endpoint)
         headers = kwargs.pop("headers", {})
@@ -180,14 +216,26 @@ class DifyBaseClient:
         发送GET请求到Dify API。
 
         Args:
-            endpoint (str): API端点
-            **kwargs: 传递给requests的其他参数
+            endpoint (str): API端点，相对于base_url的路径
+            **kwargs: 传递给_request方法的其他参数，常用的包括:
+                - params: URL查询参数
+                - timeout: 请求超时时间(秒)
+                - max_retries: 最大重试次数
 
         Returns:
-            Dict[str, Any]: 响应的JSON数据
+            Dict[str, Any]: 响应的JSON数据，解析为Python字典
 
         Raises:
-            DifyAPIError: 当API请求失败时
+            DifyAPIError: 当API请求失败时，包含详细的错误信息
+        
+        示例:
+            ```python
+            # 获取应用信息
+            app_info = client.get("app-info")
+            
+            # 带参数的请求
+            messages = client.get("messages", params={"conversation_id": "conv_123", "limit": 10})
+            ```
         """
         response = self._request("GET", endpoint, **kwargs)
         try:
@@ -212,16 +260,28 @@ class DifyBaseClient:
         发送POST请求到Dify API。
 
         Args:
-            endpoint (str): API端点
+            endpoint (str): API端点，相对于base_url的路径
             data (Dict[str, Any], optional): 要发送的表单数据
             json_data (Dict[str, Any], optional): 要发送的JSON数据
-            **kwargs: 传递给requests的其他参数
+            **kwargs: 传递给_request方法的其他参数，常用的包括:
+                - timeout: 请求超时时间(秒)
+                - max_retries: 最大重试次数
 
         Returns:
-            Dict[str, Any]: 响应的JSON数据
+            Dict[str, Any]: 响应的JSON数据，解析为Python字典
 
         Raises:
-            DifyAPIError: 当API请求失败时
+            DifyAPIError: 当API请求失败时，包含详细的错误信息
+        
+        示例:
+            ```python
+            # 发送消息
+            response = client.post("messages", json_data={
+                "query": "你好",
+                "user": "user_123",
+                "response_mode": "blocking"
+            })
+            ```
         """
         response = self._request("POST", endpoint, data=data, json=json_data, **kwargs)
         try:
@@ -239,18 +299,39 @@ class DifyBaseClient:
         self, endpoint: str, json_data: Dict[str, Any], **kwargs
     ) -> Generator[Dict[str, Any], None, None]:
         """
-        发送流式POST请求到Dify API。
+        发送流式POST请求到Dify API，用于接收SSE实时响应。
+
+        此方法主要用于处理长时间运行的请求，如流式生成文本、Agent思考过程、
+        工作流执行等需要实时获取进度和结果的场景。
 
         Args:
-            endpoint (str): API端点
-            json_data (Dict[str, Any]): JSON数据
-            **kwargs: 传递给requests的其他参数
+            endpoint (str): API端点，相对于base_url的路径
+            json_data (Dict[str, Any]): 要发送的JSON数据
+            **kwargs: 传递给requests的其他参数，常用的包括:
+                - timeout: 请求超时时间(秒)，流式请求通常需要更长的超时时间
+                - max_retries: 最大重试次数
 
         Yields:
-            Dict[str, Any]: 每个响应块的JSON数据
+            Dict[str, Any]: 每个SSE事件块解析后的JSON数据
 
         Raises:
             DifyAPIError: 当API请求失败时
+            网络错误: 连接问题、超时等
+        
+        示例:
+            ```python
+            # 流式生成文本
+            stream = client.post_stream("messages", json_data={
+                "query": "写一篇文章",
+                "user": "user_123",
+                "response_mode": "streaming"
+            })
+            
+            # 处理每个事件块
+            for chunk in stream:
+                if "answer" in chunk:
+                    print(chunk["answer"], end="")
+            ```
         """
         url = urljoin(self.base_url, endpoint)
         headers = kwargs.pop("headers", {})
@@ -265,8 +346,8 @@ class DifyBaseClient:
         kwargs["timeout"] = timeout
 
         # 打印请求信息，方便调试
-        print(f"请求URL: {url}")
-        print(f"请求参数: {json.dumps(json_data, ensure_ascii=False)[:500]}")
+        # print(f"请求URL: {url}")
+        # print(f"请求参数: {json.dumps(json_data, ensure_ascii=False)[:500]}")
 
         for attempt in range(max_retries + 1):
             try:
@@ -474,8 +555,8 @@ class DifyBaseClient:
             url = urljoin(self.base_url, "files/upload")
 
             # 打印调试信息
-            print(f"文件上传请求URL: {url}")
-            print(f"文件名: {filename}, MIME类型: {mime_type}")
+            # print(f"文件上传请求URL: {url}")
+            # print(f"文件名: {filename}, MIME类型: {mime_type}")
 
             # 准备请求头（不包含Content-Type，让requests自动处理)
             headers = {
@@ -596,9 +677,12 @@ class DifyBaseClient:
             f"messages/{message_id}/feedbacks", json_data=payload, **kwargs
         )
 
-    def get_app_info(self) -> Dict[str, Any]:
+    def get_app_info(self, **kwargs) -> Dict[str, Any]:
         """
         获取应用基本信息。
+
+        Args:
+            **kwargs: 额外的请求参数，如timeout、max_retries等
 
         Returns:
             Dict[str, Any]: 应用信息，包含名称、描述和标签
@@ -606,7 +690,7 @@ class DifyBaseClient:
         Raises:
             DifyAPIError: 当API请求失败时
         """
-        return self.get("info")
+        return self.get("info", **kwargs)
 
     ALLOWED_FILE_EXTENSIONS = {
         "image": [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"],
@@ -631,14 +715,14 @@ class DifyBaseClient:
         "video": [".mp4", ".mov", ".mpeg", ".mpga"],
     }
 
-    def get_parameters(self, raw: bool = False, **kwargs) -> Dict[str, Any]:
+    def get_parameters(self, raw: bool = True, **kwargs) -> Dict[str, Any]:
         """
         获取应用参数，包括功能开关、输入参数配置、文件上传限制等。
 
         此方法通常用于应用初始化阶段，获取应用的各种配置参数和功能开关状态。
 
         Args:
-            raw (bool): 是否返回原始数据，默认返回处理后的数据
+            raw (bool): 是否返回原始数据，默认为True
             **kwargs: 额外的请求参数，如timeout、max_retries等
 
         Returns:
@@ -905,26 +989,37 @@ class DifyBaseClient:
 
         return self.post(f"conversations/{conversation_id}/name", json_data=payload)
 
-    def get_suggested_questions(self, message_id: str, user: str) -> Dict[str, Any]:
+    def get_suggested_questions(
+        self, message_id: str, user: str, **kwargs
+    ) -> Dict[str, Any]:
         """
-        获取推荐问题列表。
+        获取下一轮建议问题列表。
 
         Args:
-            message_id (str): 消息ID
-            user (str): 用户标识
+            message_id (str): 消息ID，用于获取指定消息的建议问题
+            user (str): 用户唯一标识，用于追踪用户上下文
+            **kwargs: 额外的请求参数，支持timeout(超时时间)、max_retries(最大重试次数)等
 
         Returns:
-            Dict[str, Any]: 推荐问题列表
+            Dict[str, Any]: 返回包含建议问题列表的字典，格式如下:
+            {
+                "result": "success",  # 请求结果状态
+                "data": [             # 建议问题列表
+                    "问题1",
+                    "问题2",
+                    "问题3"
+                ]
+            }
 
         Raises:
-            DifyAPIError: 当API请求失败时
+            DifyAPIError: 当API请求失败时抛出此异常，包含详细的错误信息
         """
+        endpoint = f"messages/{message_id}/suggested"
+
         params = {
             "user": user,
-            "message_id": message_id,
         }
-
-        return self.get("suggested-questions", params=params)
+        return self.get(endpoint, params=params, **kwargs)
 
     def process_streaming_response(
         self, stream_generator: Generator[Dict[str, Any], None, None], **handlers

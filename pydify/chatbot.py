@@ -9,7 +9,7 @@ import json
 import os
 from typing import Any, Dict, Generator, List, Optional, Union
 
-from .common import DifyBaseClient
+from .common import DifyBaseClient, DifyType
 
 
 class ChatbotClient(DifyBaseClient):
@@ -18,7 +18,7 @@ class ChatbotClient(DifyBaseClient):
     提供与Dify Chatbot应用API交互的方法，包括发送消息、获取历史消息、管理会话、
     上传文件、语音转文字、文字转语音等功能。
     """
-    
+    type = DifyType.Chatbot
     def send_message(
         self,
         query: str,
@@ -81,7 +81,7 @@ class ChatbotClient(DifyBaseClient):
             return self.post_stream(endpoint, json_data=payload, **kwargs)
         else:
             return self.post(endpoint, json_data=payload, **kwargs)
-
+    
     def stop_response(self, task_id: str, user: str) -> Dict[str, Any]:
         """
         停止正在进行的响应，仅支持流式模式。

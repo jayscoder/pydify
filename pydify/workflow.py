@@ -32,11 +32,39 @@ class WorkflowClient(DifyBaseClient):
         
         Args:
             inputs (Dict[str, Any]): 必需参数。包含工作流所需的输入变量键值对。
-                                   每个键对应一个变量名称,值为该变量的具体内容。
-                                   如果变量类型为文件,值需要是一个包含文件信息的字典,
-                                   具体格式参考files参数说明。
-            user (str): 用户标识
-            response_mode (str, optional): 响应模式，'streaming'（流式）或'blocking'（阻塞）。默认为'streaming'。
+                                   每个键对应一个工作流定义中的变量名称，值为该变量的具体内容。
+                                   
+                                   注意：根据API版本的不同，Dify API可能期望不同的参数格式：
+                                   - 有些API版本要求使用 "inputs" 作为键
+                                   - 有些API版本要求使用 "input" 作为键
+                                   - 有些API版本期望直接提供扁平的输入结构
+                                   
+                                   常见输入示例：
+                                   ```
+                                   # 简单文本输入
+                                   inputs = {
+                                       "prompt": "请给我写一首诗",
+                                       "topic": "人工智能"
+                                   }
+                                   
+                                   # 包含更复杂结构的输入
+                                   inputs = {
+                                       "text_to_analyze": "这是一段需要分析的文本",
+                                       "analysis_type": "sentiment",
+                                       "options": {
+                                           "detailed": True,
+                                           "language": "chinese"
+                                       }
+                                   }
+                                   ```
+                                   
+            user (str): 用户标识，用于跟踪和区分不同用户的请求
+            
+            response_mode (str, optional): 响应模式:
+                - 'streaming'（流式）: 实时获取工作流执行过程和结果，适合长时间运行的任务
+                - 'blocking'（阻塞）: 等待工作流完全执行完毕后返回结果，适合简短任务
+                默认为'streaming'。
+                
             files (List[Dict[str, Any]], optional): 文件列表，每个文件为一个字典，包含以下字段：
                 - type (str): 文件类型，支持:
                     - document: 支持'TXT', 'MD', 'MARKDOWN', 'PDF', 'HTML', 'XLSX', 'XLS',
@@ -45,37 +73,69 @@ class WorkflowClient(DifyBaseClient):
                     - audio: 支持'MP3', 'M4A', 'WAV', 'WEBM', 'AMR'
                     - video: 支持'MP4', 'MOV', 'MPEG', 'MPGA'
                     - custom: 支持其他文件类型
-                - transfer_method (str): 传递方式，'remote_url'(图片地址)或'local_file'(上传文件)
-                - url (str): 图片地址（仅当transfer_method为'remote_url'时需要）
+                - transfer_method (str): 传递方式:
+                    - 'remote_url': 使用远程URL获取文件
+                    - 'local_file': 使用之前通过upload_file上传的文件ID
+                - url (str): 文件的URL地址（仅当transfer_method为'remote_url'时需要）
                 - upload_file_id (str): 上传文件ID（仅当transfer_method为'local_file'时需要）
-            **kwargs: 额外的请求参数，如timeout、max_retries等
+                
+                示例:
+                ```
+                [
+                    {
+                        "type": "document",
+                        "transfer_method": "local_file",
+                        "upload_file_id": "文件ID"
+                    },
+                    {
+                        "type": "image",
+                        "transfer_method": "remote_url",
+                        "url": "https://example.com/image.png"
+                    }
+                ]
+                ```
+                
+            **kwargs: 额外的请求参数:
+                - timeout (int): 请求超时时间(秒)，默认为30秒
+                - max_retries (int): 网络错误时的最大重试次数，默认为2次
 
         Returns:
             Union[Dict[str, Any], Generator[Dict[str, Any], None, None]]:
-                如果response_mode为'blocking'，返回完整响应字典；
-                如果response_mode为'streaming'，返回字典生成器。
+                如果response_mode为'blocking'，返回完整响应字典，包含工作流执行结果;
+                如果response_mode为'streaming'，返回一个字典生成器，实时提供工作流执行状态。
+                
+                阻塞模式返回示例:
+                ```
+                {
+                    "id": "workflow_run_id",
+                    "status": "succeeded",
+                    "outputs": {
+                        "result": "这是工作流的结果输出",
+                        "additional_data": {...}
+                    },
+                    "started_at": 1617979572,
+                    "ended_at": 1617979575
+                }
+                ```
+                
+                流式模式返回的每个事件示例:
+                ```
+                {
+                    "event": "workflow_started",
+                    "data": {"id": "workflow_run_id", ...}
+                }
+                ```
 
         Raises:
-            ValueError: 当提供了无效的参数时
-            DifyAPIError: 当API请求失败时
-
-        Example:
-            ```python
-            # 基本文本输入示例
-            inputs = {
-                "prompt": "分析最近的经济数据",
-                "data_source": "公开数据"
-            }
-
-            # 包含文件的输入示例
-            inputs = {
-                "document": {
-                    "type": "document",
-                    "transfer_method": "remote_url",
-                    "url": "https://example.com/doc.pdf"
-                }
-            }
-            ```
+            ValueError: 当提供了无效的参数时，例如不支持的response_mode
+            DifyAPIError: 当API请求失败时。常见错误包括:
+                - 400 invalid_param: 缺少必需参数或参数格式错误
+                - 400 input_is_required: 工作流需要输入但未提供
+                - 400 wrong_format: 输入格式不正确
+                - 401 unauthorized: API密钥无效或无权限
+                - 404 not_found: 工作流不存在
+                - 429 too_many_requests: 请求频率超限
+                - 500 internal_server_error: 服务器内部错误
         """
         if response_mode not in ["streaming", "blocking"]:
             raise ValueError("response_mode must be 'streaming' or 'blocking'")
@@ -92,10 +152,6 @@ class WorkflowClient(DifyBaseClient):
             payload["files"] = files
 
         endpoint = "workflows/run"
-
-        # 打印实际发送的payload，帮助调试
-        print(f"发送工作流请求: {endpoint}")
-        print(f"请求内容: {json.dumps(payload, ensure_ascii=False)}")
 
         try:
             if response_mode == "streaming":
@@ -172,21 +228,6 @@ class WorkflowClient(DifyBaseClient):
             params["status"] = status
 
         return self.get("workflows/logs", params=params, **kwargs)
-
-    def get_app_info(self, **kwargs) -> Dict[str, Any]:
-        """
-        获取应用基本信息。
-
-        Args:
-            **kwargs: 额外的请求参数，如timeout、max_retries等
-
-        Returns:
-            Dict[str, Any]: 应用信息数据
-
-        Raises:
-            DifyAPIError: 当API请求失败时
-        """
-        return self.get("info", **kwargs)
 
     def process_streaming_response(
         self,

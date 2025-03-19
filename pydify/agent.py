@@ -72,120 +72,30 @@ class AgentClient(DifyBaseClient):
         endpoint = "chat-messages"
 
         return self.post_stream(endpoint, json_data=payload, **kwargs)  # 传递额外参数
-
+    
     def stop_response(self, task_id: str, user: str) -> Dict[str, Any]:
         """
-        停止正在进行的响应，仅支持流式模式。
+        停止正在进行的响应流。此方法仅在流式模式下有效。
 
         Args:
-            task_id (str): 任务ID，可在流式返回Chunk中获取
-            user (str): 用户标识，必须和发送消息接口传入user保持一致
+            task_id (str): 任务唯一标识,可从流式响应的数据块中获取
+            user (str): 用户唯一标识,需要与发送消息时的user参数保持一致
 
         Returns:
-            Dict[str, Any]: 停止响应的结果
+            Dict[str, Any]: 停止响应的结果,格式如下:
+            {
+                "result": "success"  # 表示成功停止响应
+            }
 
         Raises:
-            requests.HTTPError: 当API请求失败时
+            requests.HTTPError: API请求失败时抛出此异常,包含具体的错误信息
+            DifyAPIError: Dify服务端返回错误时抛出此异常
         """
         endpoint = f"chat-messages/{task_id}/stop"
         payload = {"user": user}
         return self.post(endpoint, json_data=payload)
 
-    def message_feedback(
-        self,
-        message_id: str,
-        user: str,
-        rating: str = None,
-        content: str = None,
-    ) -> Dict[str, Any]:
-        """
-        对消息进行反馈（点赞/点踩）。
-
-        Args:
-            message_id (str): 消息ID
-            user (str): 用户标识
-            rating (str, optional): 评价，可选值：'like'(点赞), 'dislike'(点踩), None(撤销)。默认为None
-            content (str, optional): 反馈的具体信息。默认为None
-
-        Returns:
-            Dict[str, Any]: 反馈结果
-
-        Raises:
-            ValueError: 当提供了无效的参数时
-            requests.HTTPError: 当API请求失败时
-        """
-        if rating and rating not in ["like", "dislike", None]:
-            raise ValueError("rating must be 'like', 'dislike' or None")
-
-        endpoint = f"messages/{message_id}/feedbacks"
-
-        payload = {"user": user}
-
-        if rating is not None:
-            payload["rating"] = rating
-
-        if content:
-            payload["content"] = content
-
-        return self.post(endpoint, json_data=payload)
-
-    def get_suggested_questions(
-        self, message_id: str, user: str, **kwargs
-    ) -> Dict[str, Any]:
-        """
-        获取下一轮建议问题列表。
-
-        Args:
-            message_id (str): 消息ID
-            user (str): 用户标识
-            **kwargs: 额外的请求参数，如timeout、max_retries等
-
-        Returns:
-            Dict[str, Any]: 建议问题列表
-
-        Raises:
-            DifyAPIError: 当API请求失败时
-        """
-        # 尝试多种可能的端点路径格式
-        possible_endpoints = [
-            f"messages/{message_id}/suggested",  # 原始格式
-            f"messages/{message_id}/suggested-questions",  # 新格式1
-            f"chat-messages/{message_id}/suggested-questions",  # 新格式2
-            "suggested-questions",  # 当前格式
-        ]
-
-        params = {
-            "user": user,
-        }
-
-        # 添加详细日志
-        # print(f"请求推荐问题: 消息ID={message_id}, 用户={user}")
-
-        # 尝试所有可能的端点，直到找到一个有效的
-        last_error = None
-        for endpoint in possible_endpoints:
-            try:
-                params_to_use = params.copy()
-                # 如果端点是standalone的suggested-questions，需要添加message_id参数
-                if endpoint == "suggested-questions":
-                    params_to_use["message_id"] = message_id
-                else:
-                    # 否则可能不需要在参数中包含message_id
-                    params_to_use.pop("message_id", None)
-
-                print(f"尝试端点: {endpoint}, 参数: {params_to_use}")
-                result = self.get(endpoint, params=params_to_use, **kwargs)
-                print(f"端点 {endpoint} 请求成功!")
-                return result
-            except Exception as e:
-                last_error = e
-                print(f"端点 {endpoint} 请求失败: {str(e)}")
-                continue
-
-        # 如果所有端点都失败，记录最后一个错误并返回空结果
-        print(f"所有推荐问题端点请求都失败。最后错误: {str(last_error)}")
-        return {"data": []}
-
+    
 
     def get_meta(self) -> Dict[str, Any]:
         """
