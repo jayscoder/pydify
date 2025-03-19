@@ -8,7 +8,7 @@ Text Generation文本生成应用无会话支持，适合用于翻译、文章�
 import os
 from typing import Any, Dict, Generator, List, Optional, Union
 
-from .common import DifyBaseClient
+from .common import DifyBaseClient, DifyType
 
 
 class TextGenerationClient(DifyBaseClient):
@@ -18,6 +18,8 @@ class TextGenerationClient(DifyBaseClient):
     上传文件、文字转语音等功能。Text Generation应用无会话支持，
     适合用于翻译、文章写作、总结等AI任务。
     """
+    type = DifyType.TextGeneration
+    
 
     def completion(
         self,

@@ -18,7 +18,7 @@ class ChatbotClient(DifyBaseClient):
     提供与Dify Chatbot应用API交互的方法，包括发送消息、获取历史消息、管理会话、
     上传文件、语音转文字、文字转语音等功能。
     """
-
+    
     def send_message(
         self,
         query: str,

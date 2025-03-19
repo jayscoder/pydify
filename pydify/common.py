@@ -24,6 +24,16 @@ import requests
 from requests.exceptions import JSONDecodeError as RequestsJSONDecodeError
 
 
+class DifyType:
+    """Dify类型
+    """
+    Workflow = 'workflow'
+    Chatbot = 'chatbot'
+    Chatflow = 'chatflow'
+    Agent = 'agent'
+    TextGeneration = 'text_generation'
+    
+
 class DifyBaseClient:
     """Dify API 基础客户端类。
 
@@ -31,6 +41,8 @@ class DifyBaseClient:
     各种特定应用类型的客户端都继承自此类，以重用共同的功能。
     """
 
+    type = None
+    
     def __init__(self, api_key: str, base_url: str = None):
         """
         初始化Dify API客户端。

@@ -8,7 +8,7 @@ import json
 import os
 from typing import Any, BinaryIO, Dict, Generator, List, Optional, Tuple, Union
 
-from .common import DifyAPIError, DifyBaseClient
+from .common import DifyAPIError, DifyBaseClient, DifyType
 
 
 class WorkflowClient(DifyBaseClient):
@@ -16,7 +16,9 @@ class WorkflowClient(DifyBaseClient):
 
     提供与Dify Workflow应用API交互的方法，包括执行工作流、停止响应、上传文件和获取日志等功能。
     """
-
+    
+    type = DifyType.Workflow
+    
     def run(
         self,
         inputs: Dict[str, Any],
@@ -27,7 +29,7 @@ class WorkflowClient(DifyBaseClient):
     ) -> Union[Dict[str, Any], Generator[Dict[str, Any], None, None]]:
         """
         执行工作流。
-
+        
         Args:
             inputs (Dict[str, Any]): 必需参数。包含工作流所需的输入变量键值对。
                                    每个键对应一个变量名称,值为该变量的具体内容。

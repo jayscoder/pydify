@@ -10,7 +10,7 @@ import mimetypes
 import os
 from typing import Any, BinaryIO, Dict, Generator, List, Optional, Tuple, Union
 
-from .common import DifyBaseClient
+from .common import DifyBaseClient, DifyType
 
 
 class ChatflowClient(DifyBaseClient):
@@ -19,7 +19,7 @@ class ChatflowClient(DifyBaseClient):
     提供与Dify Chatflow应用API交互的方法，包括发送消息、获取历史消息、管理会话、
     上传文件、语音转文字、文字转语音等功能。Chatflow应用基于工作流编排，适用于定义复杂流程的多轮对话场景。
     """
-
+    type = DifyType.Chatflow
     def send_message(
         self,
         query: str,
