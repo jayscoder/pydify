@@ -28,7 +28,7 @@ def create_client(type: str, base_url: str, api_key: str) -> DifyBaseClient:
         raise ValueError(f"Invalid client type: {type}")
 
 
-__version__ = "2.2.0"
+__version__ = "2.2.1"
 __all__ = [
     "WorkflowClient",
     "ChatbotClient",
