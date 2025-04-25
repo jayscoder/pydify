@@ -42,6 +42,8 @@ class DifySite:
         Raises:
             Exception: 登录失败时抛出异常，包含错误信息
         """
+        if base_url.endswith('/'):
+            base_url = base_url[:-1]
         self.base_url = base_url
         self.email = email
         self.password = password
@@ -404,4 +406,41 @@ class DifySite:
         )
         if response.status_code != 204:
             raise Exception(f"删除应用失败: {response.text}")
+        return response.json()
+
+    
+    def update_app(self, app_id, name, description):
+        """
+        更新指定应用的名称和描述
+
+        Args:
+            app_id (str): 要更新的应用ID
+            name (str): 新的应用名称
+            description (str): 新的应用描述
+
+        Raises:
+            Exception: 更新应用失败时抛出异常，包含错误信息
+
+        Returns:
+            dict: 更新应用成功后的响应数据，包含以下字段:
+                - id (str): 应用ID
+                - name (str): 应用名称
+                - description (str): 应用描述
+                - mode (str): 应用模式
+                - icon (str): 应用图标
+                - icon_background (str): 图标背景色
+                - icon_type (str): 图标类型
+        """
+        update_url = f"{self.base_url}/console/api/apps/{app_id}"
+        payload = {
+            "name": name,
+            "description": description,
+        }
+        response = requests.put(
+            update_url,
+            headers={"Authorization": f"Bearer {self.access_token}"},
+            json=payload,
+        )
+        if response.status_code != 200:
+            raise Exception(f"更新应用失败: {response.text}")
         return response.json()
