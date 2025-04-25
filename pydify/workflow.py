@@ -10,6 +10,104 @@ from typing import Any, BinaryIO, Dict, Generator, List, Optional, Tuple, Union
 
 from .common import DifyAPIError, DifyBaseClient, DifyType
 
+class WorkflowEvent:
+    """事件类型枚举
+
+    定义了Dify API中可能的事件类型，用于处理流式响应中的事件。
+    """
+    
+    WORKFLOW_STARTED = "workflow_started"  # workflow开始执行事件
+    NODE_STARTED = "node_started"  # 节点开始执行事件
+    NODE_FINISHED = "node_finished"  # 节点执行结束事件（包含成功/失败状态）
+    WORKFLOW_FINISHED = "workflow_finished"  # workflow执行结束事件（包含成功/失败状态）
+    TTS_MESSAGE = "tts_message"  # TTS音频流事件，包含base64编码的音频块
+    TTS_MESSAGE_END = "tts_message_end"  # TTS音频流结束事件
+    PING = "ping"  # 保持连接存活的ping事件，每10秒一次
+    TEXT_CHUNK = "text_chunk"  # 文本块事件，包含文本内容
+    ERROR = 'error'
+    
+    """
+    定义了Dify Workflow API中可能的事件类型，用于处理流式响应中的事件。
+
+    示例结构体:
+        workflow_started: {
+            "event": "workflow_started",
+            "task_id": "task_123",
+            "workflow_run_id": "run_456",
+            "data": {
+                "id": "run_456",
+                "workflow_id": "workflow_789",
+                "sequence_number": 1,
+                "created_at": 1705395332
+            }
+        }
+        node_started: {
+            "event": "node_started",
+            "task_id": "task_123",
+            "workflow_run_id": "run_456",
+            "data": {
+                "id": "node_123",
+                "node_id": "node_456",
+                "node_type": "llm",
+                "title": "文本生成",
+                "index": 1,
+                "predecessor_node_id": "node_789",
+                "inputs": {"prompt": "你好"},
+                "created_at": 1705395332
+            }
+        }
+        node_finished: {
+            "event": "node_finished",
+            "task_id": "task_123",
+            "workflow_run_id": "run_456",
+            "data": {
+                "id": "node_123",
+                "node_id": "node_456",
+                "index": 1,
+                "inputs": {"prompt": "你好"},
+                "outputs": {"result": "你好，世界"},
+                "status": "succeeded",
+                "elapsed_time": 1.23,
+                "total_tokens": 100,
+                "created_at": 1705395332
+            }
+        }
+        workflow_finished: {
+            "event": "workflow_finished",
+            "task_id": "task_123",
+            "workflow_run_id": "run_456",
+            "data": {
+                "id": "run_456",
+                "workflow_id": "workflow_789",
+                "status": "succeeded",
+                "outputs": {"final_result": "处理完成"},
+                "elapsed_time": 5.67,
+                "total_tokens": 500,
+                "total_steps": 3,
+                "created_at": 1705395332,
+                "finished_at": 1705395337
+            }
+        }
+        tts_message: {
+            "event": "tts_message",
+            "task_id": "task_123",
+            "message_id": "msg_456",
+            "audio": "base64编码的音频数据",
+            "created_at": 1705395332
+        }
+        tts_message_end: {
+            "event": "tts_message_end",
+            "task_id": "task_123",
+            "message_id": "msg_456",
+            "audio": "",
+            "created_at": 1705395332
+        }
+        ping: {
+            "event": "ping"
+        }
+    """
+
+
 
 class WorkflowClient(DifyBaseClient):
     """Dify Workflow应用客户端类。
@@ -29,7 +127,7 @@ class WorkflowClient(DifyBaseClient):
     ) -> Union[Dict[str, Any], Generator[Dict[str, Any], None, None]]:
         """
         执行工作流。
-
+        
         Args:
             inputs (Dict[str, Any]): 必需参数。包含工作流所需的输入变量键值对。
                                    每个键对应一个工作流定义中的变量名称，值为该变量的具体内容。
@@ -176,7 +274,7 @@ class WorkflowClient(DifyBaseClient):
                 )
             else:
                 # 原样抛出其他错误
-                raise
+                raise e
 
     def stop_task(self, task_id: str, user: str, **kwargs) -> Dict[str, Any]:
         """
@@ -196,7 +294,25 @@ class WorkflowClient(DifyBaseClient):
         endpoint = f"workflows/tasks/{task_id}/stop"
         payload = {"user": user}
         return self.post(endpoint, json_data=payload, **kwargs)
-
+    
+    def get_run_info(self, workflow_id: str, **kwargs) -> Dict[str, Any]:
+        '''
+        获取工作流执行信息
+        id (string) workflow 执行 ID
+        workflow_id (string) 关联的 Workflow ID
+        status (string) 执行状态 running / succeeded / failed / stopped
+        inputs (json) 任务输入内容
+        outputs (json) 任务输出内容
+        error (string) 错误原因
+        total_steps (int) 任务执行总步数
+        total_tokens (int) 任务执行总 tokens
+        created_at (timestamp) 任务开始时间
+        finished_at (timestamp) 任务结束时间
+        elapsed_time (float) 耗时(s)
+        '''
+        endpoint = f"workflows/runs/{workflow_id}"
+        return self.get(endpoint, **kwargs)
+    
     def get_logs(
         self,
         keyword: str = None,
@@ -228,82 +344,3 @@ class WorkflowClient(DifyBaseClient):
             params["status"] = status
 
         return self.get("workflows/logs", params=params, **kwargs)
-
-    def process_streaming_response(
-        self,
-        stream_generator: Generator[Dict[str, Any], None, None],
-        handle_workflow_started=None,
-        handle_node_started=None,
-        handle_node_finished=None,
-        handle_workflow_finished=None,
-        handle_tts_message=None,
-        handle_tts_message_end=None,
-        handle_ping=None,
-    ) -> Dict[str, Any]:
-        """
-        处理流式响应，调用相应事件处理器。
-
-        Args:
-            stream_generator: 流式响应生成器
-            handle_workflow_started: 工作流开始事件处理函数
-            handle_node_started: 节点开始事件处理函数
-            handle_node_finished: 节点完成事件处理函数
-            handle_workflow_finished: 工作流完成事件处理函数
-            handle_tts_message: TTS消息事件处理函数
-            handle_tts_message_end: TTS消息结束事件处理函数
-            handle_ping: ping事件处理函数
-
-        Returns:
-            Dict[str, Any]: 最终工作流结果
-
-        示例:
-            ```python
-            def on_workflow_started(data):
-                print(f"工作流开始: {data['id']}")
-
-            def on_node_finished(data):
-                print(f"节点完成: {data['node_id']}, 状态: {data['status']}")
-
-            def on_workflow_finished(data):
-                print(f"工作流完成: {data['id']}, 状态: {data['status']}")
-
-            client = WorkflowClient(api_key)
-            stream = client.run(inputs={"prompt": "你好"}, user="user123")
-            result = client.process_streaming_response(
-                stream,
-                handle_workflow_started=on_workflow_started,
-                handle_node_finished=on_node_finished,
-                handle_workflow_finished=on_workflow_finished
-            )
-            ```
-        """
-        final_result = {}
-
-        for chunk in stream_generator:
-            event = chunk.get("event")
-
-            if event == "workflow_started" and handle_workflow_started:
-                handle_workflow_started(chunk.get("data", {}))
-
-            elif event == "node_started" and handle_node_started:
-                handle_node_started(chunk.get("data", {}))
-
-            elif event == "node_finished" and handle_node_finished:
-                handle_node_finished(chunk.get("data", {}))
-
-            elif event == "workflow_finished" and handle_workflow_finished:
-                data = chunk.get("data", {})
-                if handle_workflow_finished:
-                    handle_workflow_finished(data)
-                final_result = data
-
-            elif event == "tts_message" and handle_tts_message:
-                handle_tts_message(chunk)
-
-            elif event == "tts_message_end" and handle_tts_message_end:
-                handle_tts_message_end(chunk)
-
-            elif event == "ping" and handle_ping:
-                handle_ping(chunk)
-
-        return final_result

@@ -5,12 +5,12 @@ Pydify - Dify API的Python客户端库
 包括对话、文本生成、工作流、文件上传等。
 """
 
-from .agent import AgentClient
-from .chatbot import ChatbotClient
-from .chatflow import ChatflowClient
+from .agent import AgentClient, AgentEvent
+from .chatbot import ChatbotClient, ChatbotEvent
+from .chatflow import ChatflowClient, ChatflowEvent
 from .common import DifyBaseClient, DifyType
-from .text_generation import TextGenerationClient
-from .workflow import WorkflowClient
+from .text_generation import TextGenerationClient, TextGenerationEvent
+from .workflow import WorkflowClient, WorkflowEvent
 
 
 def create_client(type: str, base_url: str, api_key: str) -> DifyBaseClient:
@@ -36,4 +36,7 @@ __all__ = [
     "AgentClient",
     "TextGenerationClient",
     "create_client",
+    "DifyType",
+    "ChatbotEvent",
+    "WorkflowEvent",
 ]

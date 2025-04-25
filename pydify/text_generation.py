@@ -11,6 +11,104 @@ from typing import Any, Dict, Generator, List, Optional, Union
 from .common import DifyBaseClient, DifyType
 
 
+
+class TextGenerationEvent:
+    """事件类型枚举
+
+    定义了Dify API中可能的事件类型，用于处理流式响应中的事件。
+
+    示例结构体:
+        message: {
+            "event": "message",
+            "task_id": "task_123",
+            "message_id": "msg_456",
+            "conversation_id": "conv_789",
+            "answer": "这是LLM返回的文本块",
+            "created_at": 1705395332
+        }
+        agent_message: {
+            "event": "agent_message",
+            "task_id": "task_123",
+            "message_id": "msg_456",
+            "conversation_id": "conv_789",
+            "answer": "这是Agent模式下返回的文本块",
+            "created_at": 1705395332
+        }
+        agent_thought: {
+            "event": "agent_thought",
+            "task_id": "task_123",
+            "message_id": "msg_456",
+            "position": 1,
+            "thought": "Agent正在思考...",
+            "observation": "工具调用返回结果",
+            "tool": "tool1;tool2",
+            "tool_input": "{\"dalle3\": {\"prompt\": \"a cute cat\"}}",
+            "created_at": 1705395332,
+            "message_files": ["file_123"],
+            "file_id": "file_123",
+            "conversation_id": "conv_789"
+        }
+        message_file: {
+            "event": "message_file",
+            "id": "file_123",
+            "type": "image",
+            "belongs_to": "assistant",
+            "url": "https://example.com/file.jpg",
+            "conversation_id": "conv_789"
+        }
+        message_end: {
+            "event": "message_end",
+            "task_id": "task_123",
+            "message_id": "msg_456",
+            "conversation_id": "conv_789",
+            "metadata": {},
+            "usage": {},
+            "retriever_resources": []
+        }
+        tts_message: {
+            "event": "tts_message",
+            "task_id": "task_123",
+            "message_id": "msg_456",
+            "audio": "base64编码的音频数据",
+            "created_at": 1705395332
+        }
+        tts_message_end: {
+            "event": "tts_message_end",
+            "task_id": "task_123",
+            "message_id": "msg_456",
+            "audio": "",
+            "created_at": 1705395332
+        }
+        message_replace: {
+            "event": "message_replace",
+            "task_id": "task_123",
+            "message_id": "msg_456",
+            "conversation_id": "conv_789",
+            "answer": "替换后的内容",
+            "created_at": 1705395332
+        }
+        error: {
+            "event": "error",
+            "task_id": "task_123",
+            "message_id": "msg_456",
+            "status": 500,
+            "code": "internal_error",
+            "message": "发生内部错误"
+        }
+        ping: {
+            "event": "ping",
+        }
+    """
+    
+    MESSAGE = "message"  # LLM返回文本块事件
+    MESSAGE_END = "message_end"  # 消息结束事件
+    TTS_MESSAGE = "tts_message"  # TTS音频流事件
+    TTS_MESSAGE_END = "tts_message_end"  # TTS音频流结束事件
+    MESSAGE_REPLACE = "message_replace"  # 消息内容替换事件
+    ERROR = "error"  # 异常事件
+    PING = "ping"  # 保持连接存活的ping事件
+    
+    
 class TextGenerationClient(DifyBaseClient):
     """Dify Text Generation应用客户端类。
 
@@ -56,11 +154,8 @@ class TextGenerationClient(DifyBaseClient):
         # 准备inputs，确保包含query
         if inputs is None:
             inputs = {}
-
-        # 如果inputs中没有query字段，则添加
-        if "query" not in inputs:
-            inputs["query"] = query
-
+        
+        inputs["query"] = query
         payload = {
             "inputs": inputs,
             "user": user,
@@ -77,7 +172,7 @@ class TextGenerationClient(DifyBaseClient):
         else:
             return self.post(endpoint, json_data=payload, **kwargs)  # 传递kwargs
 
-    def stop_completion(self, task_id: str, user: str) -> Dict[str, Any]:
+    def stop_task(self, task_id: str, user: str) -> Dict[str, Any]:
         """
         停止正在进行的响应，仅支持流式模式。
 
@@ -94,111 +189,3 @@ class TextGenerationClient(DifyBaseClient):
         endpoint = f"completion-messages/{task_id}/stop"
         payload = {"user": user}
         return self.post(endpoint, json_data=payload)
-
-    def process_streaming_response(
-        self,
-        stream_generator: Generator[Dict[str, Any], None, None],
-        handle_message=None,
-        handle_message_end=None,
-        handle_tts_message=None,
-        handle_tts_message_end=None,
-        handle_message_replace=None,
-        handle_error=None,
-        handle_ping=None,
-        break_on_error=True,
-    ) -> Dict[str, Any]:
-        """
-        处理流式响应，调用相应事件处理器。
-
-        Args:
-            stream_generator: 流式响应生成器
-            handle_message: LLM返回文本块事件处理函数
-            handle_message_end: 消息结束事件处理函数
-            handle_tts_message: TTS音频流事件处理函数
-            handle_tts_message_end: TTS音频流结束事件处理函数
-            handle_message_replace: 消息内容替换事件处理函数
-            handle_error: 错误事件处理函数
-            handle_ping: ping事件处理函数
-            break_on_error: 当遇到错误时是否中断处理，默认为True
-
-        Returns:
-            Dict[str, Any]: 处理结果，包含消息ID等信息
-
-        示例:
-            ```python
-            def on_message(chunk):
-                print(f"{chunk['answer']}")
-
-            def on_message_end(chunk):
-                print(f"消息结束: ID={chunk['message_id']}")
-
-            client = TextGenerationClient(api_key)
-            stream = client.completion(
-                query="写一篇关于人工智能的短文",
-                user="user123",
-                response_mode="streaming"
-            )
-            result = client.process_streaming_response(
-                stream,
-                handle_message=on_message,
-                handle_message_end=on_message_end
-            )
-            ```
-        """
-        result = {}
-        answer_chunks = []
-
-        for chunk in stream_generator:
-            event = chunk.get("event")
-
-            if event == "message" and handle_message:
-                handle_message(chunk)
-                # 累积回答内容
-                if "answer" in chunk:
-                    answer_chunks.append(chunk["answer"])
-                # 保存消息ID
-                if "message_id" in chunk and not result.get("message_id"):
-                    result["message_id"] = chunk["message_id"]
-                if "task_id" in chunk and not result.get("task_id"):
-                    result["task_id"] = chunk["task_id"]
-
-            elif event == "message_end" and handle_message_end:
-                if handle_message_end:
-                    handle_message_end(chunk)
-                # 保存元数据
-                if "metadata" in chunk:
-                    result["metadata"] = chunk["metadata"]
-                if "message_id" in chunk and not result.get("message_id"):
-                    result["message_id"] = chunk["message_id"]
-
-            elif event == "tts_message" and handle_tts_message:
-                handle_tts_message(chunk)
-
-            elif event == "tts_message_end" and handle_tts_message_end:
-                handle_tts_message_end(chunk)
-
-            elif event == "message_replace" and handle_message_replace:
-                handle_message_replace(chunk)
-                # 替换回答内容
-                if "answer" in chunk:
-                    answer_chunks = [chunk["answer"]]
-
-            elif event == "error" and handle_error:
-                handle_error(chunk)
-                if break_on_error:
-                    # 添加错误信息到结果中
-                    result["error"] = {
-                        "status": chunk.get("status"),
-                        "code": chunk.get("code"),
-                        "message": chunk.get("message"),
-                    }
-                    break
-
-            elif event == "ping" and handle_ping:
-                handle_ping(chunk)
-
-        # 合并所有回答块
-        if answer_chunks:
-            result["answer"] = "".join(answer_chunks)
-
-        return result

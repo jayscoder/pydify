@@ -22,7 +22,10 @@ from urllib.parse import urljoin
 
 import requests
 from requests.exceptions import JSONDecodeError as RequestsJSONDecodeError
-
+import time
+import sseclient
+import datetime
+import re
 
 class DifyType:
     """Dify应用类型枚举
@@ -36,6 +39,7 @@ class DifyType:
     Chatflow = "chatflow"
     Agent = "agent"
     TextGeneration = "text_generation"
+
 
 
 class DifyBaseClient:
@@ -75,7 +79,7 @@ class DifyBaseClient:
         self.base_url = (
             base_url or os.environ.get("DIFY_BASE_URL") or "https://api.dify.ai/v1"
         )
-
+        
         # 如果base_url不以斜杠结尾，则添加斜杠
         if not self.base_url.endswith("/"):
             self.base_url += "/"
@@ -127,12 +131,12 @@ class DifyBaseClient:
         url = urljoin(self.base_url, endpoint)
         headers = kwargs.pop("headers", {})
         headers.update(self._get_headers())
-
+        
         # 设置重试机制
         max_retries = kwargs.pop("max_retries", 2)
         retry_delay = kwargs.pop("retry_delay", 1)
         timeout = kwargs.pop("timeout", 30)
-
+        
         # 添加超时参数
         kwargs["timeout"] = timeout
 
@@ -141,14 +145,32 @@ class DifyBaseClient:
                 response = requests.request(method, url, headers=headers, **kwargs)
 
                 if not response.ok:
-                    error_msg = f"API request failed: {response.status_code}"
                     error_data = {}
+                    error_details = ""
+                    
+                    # 尝试解析错误数据
                     try:
                         error_data = response.json()
-                        error_msg = f"{error_msg} - {error_data.get('error', {}).get('message', '')}"
+                        if isinstance(error_data, dict):
+                            if 'error' in error_data and isinstance(error_data['error'], dict):
+                                error_details = error_data['error'].get('message', '')
+                            else:
+                                error_details = error_data.get('message', '')
                     except RequestsJSONDecodeError:
                         if response.text:
-                            error_msg = f"{error_msg} - {response.text[:100]}"
+                            error_details = response.text[:500]
+                    
+                    # 构建格式化的错误消息
+                    error_msg = f"""
+PYDIFY:API请求失败: 
+└─ 请求信息:
+   ├─ 方法: {method}
+   ├─ URL: {url}
+   └─ 端点: {endpoint}
+└─ 响应信息:
+   ├─ 状态码: {response.status_code} ({response.reason})
+   └─ 错误详情: {error_details}
+"""
 
                     # 如果是可重试的错误码，并且还有重试次数，则重试
                     if (
@@ -158,8 +180,6 @@ class DifyBaseClient:
                         print(
                             f"请求失败，状态码: {response.status_code}，{attempt+1}秒后重试..."
                         )
-                        import time
-
                         time.sleep(retry_delay)
                         continue
 
@@ -191,27 +211,34 @@ class DifyBaseClient:
                         error_msg = f"网络错误({error_type}): {str(e)}"
 
                     print(f"{error_msg}，{attempt+1}秒后重试...")
-                    import time
-
                     time.sleep(retry_delay)
                     continue
 
                 # 提供更友好的错误信息
                 error_type = type(e).__name__
-                if isinstance(e, requests.exceptions.SSLError):
-                    error_msg = f"SSL连接错误: {str(e)}"
-                elif isinstance(e, requests.exceptions.ConnectTimeout):
-                    error_msg = f"连接超时: {str(e)}"
-                elif isinstance(e, requests.exceptions.ReadTimeout):
-                    error_msg = f"读取超时: {str(e)}"
-                elif isinstance(e, requests.exceptions.ConnectionError):
-                    error_msg = f"网络连接错误: {str(e)}"
-                else:
-                    error_msg = f"网络错误({error_type}): {str(e)}"
+                
+                # 格式化的网络错误消息
+                error_msg = f"""
+PYDIFY:网络请求失败: 
+└─ 请求信息:
+   ├─ 方法: {method}
+   ├─ URL: {url}
+   └─ 端点: {endpoint}
+└─ 错误信息:
+   ├─ 类型: {error_type}
+   └─ 详情: {str(e)}
+"""
 
                 # 提供连接问题的建议
-                suggestions = "\n请检查:\n1. 网络连接是否正常\n2. API地址是否正确\n3. 服务器是否可用\n4. SSL证书是否有效"
-
+                suggestions = """
+请检查:
+1. 网络连接是否正常
+2. API地址是否正确: {0}
+3. 服务器是否可用
+4. SSL证书是否有效
+5. 超时设置是否合理: {1}秒
+""".format(self.base_url, timeout)
+                
                 raise DifyAPIError(f"{error_msg}{suggestions}")
 
     def get(self, endpoint: str, **kwargs) -> Dict[str, Any]:
@@ -339,142 +366,127 @@ class DifyBaseClient:
         url = urljoin(self.base_url, endpoint)
         headers = kwargs.pop("headers", {})
         headers.update(self._get_headers())
-
+        
         # 设置重试机制
         max_retries = kwargs.pop("max_retries", 2)
         retry_delay = kwargs.pop("retry_delay", 1)
-        timeout = kwargs.pop("timeout", 60)  # 流式请求需要更长的超时时间
+        timeout = kwargs.get("timeout", 3600)  # 流式请求需要更长的超时时间
 
         # 添加超时参数
         kwargs["timeout"] = timeout
-
-        # 打印请求信息，方便调试
-        # print(f"请求URL: {url}")
-        # print(f"请求参数: {json.dumps(json_data, ensure_ascii=False)[:500]}")
-
-        for attempt in range(max_retries + 1):
+        
+        with requests.post(
+            url, json=json_data, headers=headers, stream=True, **kwargs
+        ) as response:
             try:
-                with requests.post(
-                    url, json=json_data, headers=headers, stream=True, **kwargs
-                ) as response:
-                    if not response.ok:
-                        error_msg = f"API request failed: {response.status_code}"
-                        error_data = {}
+                response.raise_for_status()
+            except Exception as e:
+                try:
+                    error_data = response.content.decode('utf-8').strip('\n')
+                    try:
+                        error_json = json.loads(error_data)
+                        
+                        # 构建格式化的错误消息
+                        error_msg = f"""
+PYDIFY:流式请求失败: 
+└─ 请求信息:
+   ├─ 方法: POST
+   ├─ URL: {url}
+   └─ 端点: {endpoint}
+└─ 请求参数:
+   └─ {json.dumps(json_data, ensure_ascii=False, indent=2)[:500]}...
+└─ 响应信息:
+   ├─ 状态码: {response.status_code} ({response.reason})
+   ├─ 错误类型: {error_json.get('code', '未知')}
+   └─ 错误详情: {error_json.get('message', '未知')}
+"""
+                        raise DifyAPIError(error_msg)
+                    except json.JSONDecodeError:
+                        # 无法解析JSON时直接使用原始错误内容
+                        error_msg = f"""
+PYDIFY:流式请求失败: 
+└─ 请求信息:
+   ├─ 方法: POST
+   ├─ URL: {url}
+   └─ 端点: {endpoint}
+└─ 响应信息:
+   ├─ 状态码: {response.status_code} ({response.reason})
+   └─ 错误详情: {error_data[:500]}
+└─ 原始错误:
+   └─ {str(e)}
+"""
+                        raise DifyAPIError(error_msg)
+                except Exception as decode_error:
+                    # 构建格式化的错误消息（无法获取响应内容）
+                    error_msg = f"""
+PYDIFY:流式请求失败: 
+└─ 请求信息:
+   ├─ 方法: POST
+   ├─ URL: {url}
+   └─ 端点: {endpoint}
+└─ 响应信息:
+   ├─ 状态码: {response.status_code} ({response.reason})
+└─ 原始错误:
+   ├─ 类型: {type(e).__name__}
+   └─ 详情: {str(e)}
+└─ 解析错误:
+   └─ {str(decode_error)}
+"""
+                    raise DifyAPIError(error_msg)
+                    
+            try:
+                client = sseclient.SSEClient(response)
+            except Exception as e:
+                # 构建格式化的SSE初始化错误消息
+                error_msg = f"""
+PYDIFY:SSE客户端初始化失败: 
+└─ 请求信息:
+   ├─ 方法: POST
+   ├─ URL: {url}
+   └─ 端点: {endpoint}
+└─ 错误信息:
+   ├─ 类型: {type(e).__name__}
+   └─ 详情: {str(e)}
+"""
+                raise DifyAPIError(error_msg)
+                
+            # 处理SSE流式响应
+            for event in client.events():
+                try:
+                    yield json.loads(event.data)
+                except json.JSONDecodeError as e:
+                    # 构建格式化的JSON解析错误消息
+                    error_msg = f"""
+PYDIFY:处理SSE流式响应时JSON解析错误: 
+└─ 请求信息:
+   ├─ 方法: POST
+   ├─ URL: {url}
+   └─ 端点: {endpoint}
+└─ 错误信息:
+   ├─ 类型: {type(e).__name__}
+   └─ 详情: {str(e)}
+└─ 原始数据:
+   └─ {event.data[:500]}
+"""
+                    raise DifyAPIError(error_msg)
+    
+    def stop_task(self, task_id: str, user: str) -> Dict[str, Any]:
+        '''
+        停止任务
+        仅支持流式模式。
+        Args:
+            task_id (str): 任务唯一标识,可从流式响应的数据块中获取
+            user (str): 用户唯一标识,需要与发送消息时的user参数保持一致
 
-                        try:
-                            # 尝试解析响应内容作为JSON
-                            error_data = response.json()
-                            # 提取标准错误信息字段
-                            if "error" in error_data and isinstance(
-                                error_data["error"], dict
-                            ):
-                                error_msg = f"{error_msg} - {error_data['error'].get('message', '')}"
-                            elif "message" in error_data:
-                                error_msg = (
-                                    f"{error_msg} - {error_data.get('message', '')}"
-                                )
-                        except Exception:
-                            # 如果无法解析为JSON，提供原始响应内容
-                            if response.text:
-                                error_msg = (
-                                    f"{error_msg} - 响应内容: {response.text[:200]}"
-                                )
-                            else:
-                                error_msg = f"{error_msg} - 服务器未返回错误详情"
-
-                        # 打印详细的错误信息，方便调试
-                        print(f"API请求失败 ({endpoint}):")
-                        print(f"状态码: {response.status_code}")
-                        print(f"响应头: {dict(response.headers)}")
-                        print(
-                            f"响应内容: {response.text[:500] if response.text else '(无内容)'}"
-                        )
-
-                        # 如果是可重试的错误码，并且还有重试次数，则重试
-                        if (
-                            response.status_code in [429, 500, 502, 503, 504]
-                            and attempt < max_retries
-                        ):
-                            print(
-                                f"请求失败，状态码: {response.status_code}，{attempt+1}秒后重试..."
-                            )
-                            import time
-
-                            time.sleep(retry_delay)
-                            continue
-
-                        raise DifyAPIError(
-                            error_msg,
-                            status_code=response.status_code,
-                            error_data=error_data,
-                        )
-
-                    # 处理SSE流式响应
-                    for line in response.iter_lines():
-                        if line:
-                            line = line.decode("utf-8")
-                            if line.startswith("data: "):
-                                data = line[6:]  # 移除 'data: ' 前缀
-                                try:
-                                    yield json.loads(data)
-                                except json.JSONDecodeError as e:
-                                    # 打印警告信息并继续处理
-                                    print(
-                                        f"警告: 无法解析流式响应行为JSON: {data[:100]}"
-                                    )
-                                    # 返回一个带有错误信息的字典，而不是抛出异常
-                                    yield {
-                                        "error": "JSON解析错误",
-                                        "raw_data": data[:100],
-                                    }
-
-                    # 如果成功完成了迭代，就跳出重试循环
-                    break
-
-            except (requests.RequestException, ConnectionError) as e:
-                # 如果是网络错误且还有重试次数，则重试
-                if attempt < max_retries:
-                    # 提供更详细的错误信息
-                    error_type = type(e).__name__
-
-                    # 检测具体的连接问题类型
-                    if isinstance(e, requests.exceptions.SSLError):
-                        error_msg = f"SSL连接错误: {str(e)}"
-                    elif isinstance(e, requests.exceptions.ConnectTimeout):
-                        error_msg = f"连接超时: {str(e)}"
-                    elif isinstance(e, requests.exceptions.ReadTimeout):
-                        error_msg = f"读取超时: {str(e)}"
-                    elif isinstance(e, requests.exceptions.ConnectionError):
-                        error_msg = f"网络连接错误: {str(e)}"
-                    else:
-                        error_msg = f"网络错误({error_type}): {str(e)}"
-
-                    print(f"{error_msg}，{attempt+1}秒后重试...")
-                    import time
-
-                    time.sleep(retry_delay)
-                    continue
-
-                # 提供更友好的错误信息
-                error_type = type(e).__name__
-                if isinstance(e, requests.exceptions.SSLError):
-                    error_msg = f"SSL连接错误: {str(e)}"
-                elif isinstance(e, requests.exceptions.ConnectTimeout):
-                    error_msg = f"连接超时: {str(e)}"
-                elif isinstance(e, requests.exceptions.ReadTimeout):
-                    error_msg = f"读取超时: {str(e)}"
-                elif isinstance(e, requests.exceptions.ConnectionError):
-                    error_msg = f"网络连接错误: {str(e)}"
-                else:
-                    error_msg = f"网络错误({error_type}): {str(e)}"
-
-                # 提供连接问题的建议
-                suggestions = "\n请检查:\n1. 网络连接是否正常\n2. API地址是否正确\n3. 服务器是否可用\n4. SSL证书是否有效"
-
-                raise DifyAPIError(f"{error_msg}{suggestions}")
-
+        Returns:
+            Dict[str, Any]: 停止响应的结果,格式如下:
+            {
+                "result": "success"  # 表示成功停止响应
+            }
+        '''
+        raise NotImplementedError("停止任务方法未实现")
+    
     # 通用方法 - 这些方法在多个子类中重复出现，可以移到基类
-
     def upload_file(self, file_path: str, user: str, **kwargs) -> Dict[str, Any]:
         """
         上传文件到Dify API。
@@ -557,10 +569,6 @@ class DifyBaseClient:
         try:
             url = urljoin(self.base_url, "files/upload")
 
-            # 打印调试信息
-            # print(f"文件上传请求URL: {url}")
-            # print(f"文件名: {filename}, MIME类型: {mime_type}")
-
             # 准备请求头（不包含Content-Type，让requests自动处理)
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
@@ -584,14 +592,34 @@ class DifyBaseClient:
 
             # 检查响应状态
             if not response.ok:
-                error_msg = f"API request failed: {response.status_code}"
                 error_data = {}
+                error_details = ""
+                
+                # 尝试解析错误数据
                 try:
                     error_data = response.json()
-                    error_msg = f"{error_msg} - {json.dumps(error_data)}"
+                    if isinstance(error_data, dict):
+                        if 'error' in error_data and isinstance(error_data['error'], dict):
+                            error_details = error_data['error'].get('message', '')
+                        else:
+                            error_details = error_data.get('message', '')
                 except:
                     if response.text:
-                        error_msg = f"{error_msg} - {response.text[:100]}"
+                        error_details = response.text[:500]
+                
+                # 构建格式化的错误消息
+                error_msg = f"""
+PYDIFY:文件上传失败: 
+└─ 文件信息:
+   ├─ 文件名: {filename}
+   ├─ MIME类型: {mime_type}
+   └─ 用户: {user}
+└─ 请求信息:
+   └─ URL: {url}
+└─ 响应信息:
+   ├─ 状态码: {response.status_code} ({response.reason})
+   └─ 错误详情: {error_details}
+"""
 
                 raise DifyAPIError(
                     error_msg, status_code=response.status_code, error_data=error_data
@@ -600,11 +628,36 @@ class DifyBaseClient:
             return response.json()
 
         except requests.RequestException as e:
-            raise DifyAPIError(f"文件上传网络错误: {str(e)}")
+            # 构建格式化的网络错误消息
+            error_msg = f"""
+PYDIFY:文件上传网络错误: 
+└─ 文件信息:
+   ├─ 文件名: {filename}
+   ├─ MIME类型: {mime_type}
+   └─ 用户: {user}
+└─ 请求信息:
+   └─ URL: {url}
+└─ 错误信息:
+   ├─ 类型: {type(e).__name__}
+   └─ 详情: {str(e)}
+"""
+            raise DifyAPIError(error_msg)
         except Exception as e:
             if isinstance(e, DifyAPIError):
                 raise
-            raise DifyAPIError(f"文件上传失败: {str(e)}")
+                
+            # 构建格式化的通用错误消息
+            error_msg = f"""
+PYDIFY:文件上传失败: 
+└─ 文件信息:
+   ├─ 文件名: {filename}
+   ├─ MIME类型: {mime_type}
+   └─ 用户: {user}
+└─ 错误信息:
+   ├─ 类型: {type(e).__name__}
+   └─ 详情: {str(e)}
+"""
+            raise DifyAPIError(error_msg)
 
     def text_to_audio(
         self,
@@ -727,7 +780,7 @@ class DifyBaseClient:
         Args:
             raw (bool): 是否返回原始数据，默认为True
             **kwargs: 额外的请求参数，如timeout、max_retries等
-
+        
         Returns:
             Dict[str, Any]: 包含应用参数的字典，可能包含以下字段：
                 - opening_statement (str): 应用开场白文本
@@ -848,7 +901,7 @@ class DifyBaseClient:
 
         if raw:
             return params
-
+        
         # 对user_input_form进行处理，使其变成一个列表
         user_input_form = []
         for item in params["user_input_form"]:
@@ -991,7 +1044,7 @@ class DifyBaseClient:
             payload["name"] = name
 
         return self.post(f"conversations/{conversation_id}/name", json_data=payload)
-
+    
     def get_suggested_questions(
         self, message_id: str, user: str, **kwargs
     ) -> Dict[str, Any]:
@@ -1024,23 +1077,6 @@ class DifyBaseClient:
         }
         return self.get(endpoint, params=params, **kwargs)
 
-    def process_streaming_response(
-        self, stream_generator: Generator[Dict[str, Any], None, None], **handlers
-    ) -> Dict[str, Any]:
-        """
-        处理流式响应，调用相应事件处理器。子类应重写此方法以支持特定应用类型的事件。
-
-        Args:
-            stream_generator: 流式响应生成器
-            **handlers: 各种事件的处理函数
-
-        Returns:
-            Dict[str, Any]: 处理结果，包含消息ID等信息
-        """
-        raise NotImplementedError(
-            "Subclasses must implement process_streaming_response method"
-        )
-
 
 class DifyAPIError(Exception):
     """Dify API错误异常"""
@@ -1052,8 +1088,17 @@ class DifyAPIError(Exception):
         super().__init__(self.message)
 
     def __str__(self) -> str:
+        """返回格式化的错误信息"""
         if self.status_code:
-            return f"[{self.status_code}] {self.message} {self.error_data}"
+            # 如果错误信息中已经包含了状态码信息（通常是前面改进的错误格式），就直接返回消息
+            if f"状态码: {self.status_code}" in self.message:
+                return self.message
+                
+            # 否则，添加状态码信息
+            if self.error_data:
+                return f"[状态码: {self.status_code}]\n{self.message}\n└─ 错误数据: {json.dumps(self.error_data, ensure_ascii=False, indent=2)}"
+            else:
+                return f"[状态码: {self.status_code}]\n{self.message}"
         return self.message
 
 
@@ -1122,3 +1167,5 @@ def analyze_app_capabilities(client):
             print(f"- {param}: {value}MB")
 
     return params
+
+        

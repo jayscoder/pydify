@@ -9,11 +9,31 @@ import json
 import mimetypes
 import os
 from typing import Any, BinaryIO, Dict, Generator, List, Optional, Tuple, Union
-
 from .common import DifyBaseClient, DifyType
+from .chatbot import ChatbotClient
+
+class ChatflowEvent:
+    """事件类型枚举
+
+    定义了Dify Chatflow API中可能的事件类型，用于处理流式响应中的事件。
+    """
+
+    MESSAGE = "message"  # LLM返回文本块事件，包含分块输出的文本内容
+    MESSAGE_FILE = "message_file"  # 文件事件，表示有新文件需要展示
+    MESSAGE_END = "message_end"  # 消息结束事件，表示流式返回结束
+    MESSAGE_REPLACE = "message_replace"  # 消息内容替换事件，用于内容审查后的替换
+    TTS_MESSAGE = "tts_message"  # TTS音频流事件，包含base64编码的音频块
+    TTS_MESSAGE_END = "tts_message_end"  # TTS音频流结束事件
+    WORKFLOW_STARTED = "workflow_started"  # workflow开始执行事件
+    NODE_STARTED = "node_started"  # 节点开始执行事件
+    NODE_FINISHED = "node_finished"  # 节点执行结束事件（包含成功/失败状态）
+    WORKFLOW_FINISHED = "workflow_finished"  # workflow执行结束事件（包含成功/失败状态）
+    ERROR = "error"  # 流式输出过程中出现的异常事件
+    PING = "ping"  # 保持连接存活的ping事件，每10秒一次
+    
 
 
-class ChatflowClient(DifyBaseClient):
+class ChatflowClient(ChatbotClient):
     """Dify Chatflow应用客户端类。
 
     提供与Dify Chatflow应用API交互的方法，包括发送消息、获取历史消息、管理会话、
@@ -81,7 +101,7 @@ class ChatflowClient(DifyBaseClient):
         else:
             return self.post(endpoint, json_data=payload, **kwargs)
 
-    def stop_response(self, task_id: str, user: str) -> Dict[str, Any]:
+    def stop_task(self, task_id: str, user: str) -> Dict[str, Any]:
         """
         停止正在进行的响应，仅支持流式模式。
 
@@ -98,7 +118,7 @@ class ChatflowClient(DifyBaseClient):
         endpoint = f"chat-messages/{task_id}/stop"
         payload = {"user": user}
         return self.post(endpoint, json_data=payload)
-
+    
     def get_suggested_questions(
         self, message_id: str, user: str, **kwargs
     ) -> Dict[str, Any]:
@@ -112,16 +132,17 @@ class ChatflowClient(DifyBaseClient):
 
         Returns:
             Dict[str, Any]: 建议问题列表
-
+        
         Raises:
             DifyAPIError: 当API请求失败时
         """
         params = {
             "user": user,
-            "message_id": message_id,
+            # "message_id": message_id,
         }
-
-        return self.get("suggested-questions", params=params, **kwargs)
+        # /messages/{message_id}/suggested
+        endpoint = f"messages/{message_id}/suggested"
+        return self.get(endpoint, params=params, **kwargs)
 
     def get_messages(
         self,
@@ -134,16 +155,31 @@ class ChatflowClient(DifyBaseClient):
         获取会话历史消息，滚动加载形式返回历史聊天记录，第一页返回最新limit条（倒序返回）。
 
         Args:
-            conversation_id (str): 会话ID
-            user (str): 用户标识
-            first_id (str, optional): 当前页第一条聊天记录的ID。默认为None
-            limit (int, optional): 一次请求返回多少条聊天记录。默认为20
+            conversation_id (str): 会话ID，用于标识特定的对话会话
+            user (str): 用户标识，用于验证用户权限
+            first_id (str, optional): 当前页第一条聊天记录的ID，用于分页加载。默认为None
+            limit (int, optional): 一次请求返回的聊天记录数量，默认20条，用于控制分页大小。默认为20
 
         Returns:
-            Dict[str, Any]: 消息列表及分页信息
-
+            Dict[str, Any]: 返回包含以下字段的字典:
+                - limit (int): 本次请求返回的消息数量
+                - has_more (bool): 是否还有更多历史消息
+                - data (List[Dict]): 消息列表，每个消息包含:
+                    - id (str): 消息唯一标识
+                    - conversation_id (str): 所属会话ID
+                    - inputs (Dict): 输入参数
+                    - query (str): 用户查询内容
+                    - answer (str): AI助手回答内容
+                    - message_files (List[Dict]): 消息相关文件列表，每个文件包含:
+                        - id (str): 文件ID
+                        - type (str): 文件类型
+                        - url (str): 文件访问URL
+                        - belongs_to (str): 文件所属方
+                    - feedback (Dict): 用户反馈信息
+                    - retriever_resources (List): 检索资源列表
+                    - created_at (int): 消息创建时间戳
         Raises:
-            requests.HTTPError: 当API请求失败时
+            requests.HTTPError: 当API请求失败时抛出
         """
         endpoint = "messages"
 
@@ -383,162 +419,4 @@ class ChatflowClient(DifyBaseClient):
             requests.HTTPError: 当API请求失败时
         """
         return self.get("meta")
-
-    def process_streaming_response(
-        self,
-        stream_generator: Generator[Dict[str, Any], None, None],
-        handle_message=None,
-        handle_message_file=None,
-        handle_message_end=None,
-        handle_tts_message=None,
-        handle_tts_message_end=None,
-        handle_message_replace=None,
-        handle_workflow_started=None,
-        handle_node_started=None,
-        handle_node_finished=None,
-        handle_workflow_finished=None,
-        handle_error=None,
-        handle_ping=None,
-        break_on_error=True,
-    ) -> Dict[str, Any]:
-        """
-        处理流式响应，调用相应事件处理器。
-
-        Args:
-            stream_generator: 流式响应生成器
-            handle_message: LLM返回文本块事件处理函数
-            handle_message_file: 文件事件处理函数
-            handle_message_end: 消息结束事件处理函数
-            handle_tts_message: TTS音频流事件处理函数
-            handle_tts_message_end: TTS音频流结束事件处理函数
-            handle_message_replace: 消息内容替换事件处理函数
-            handle_workflow_started: 工作流开始事件处理函数
-            handle_node_started: 节点开始事件处理函数
-            handle_node_finished: 节点完成事件处理函数
-            handle_workflow_finished: 工作流完成事件处理函数
-            handle_error: 错误事件处理函数
-            handle_ping: ping事件处理函数
-            break_on_error: 当遇到错误时是否中断处理，默认为True
-
-        Returns:
-            Dict[str, Any]: 处理结果，包含消息ID、会话ID等信息
-
-        示例:
-            ```python
-            def on_message(chunk):
-                print(f"收到消息块: {chunk['answer']}")
-
-            def on_workflow_started(data):
-                print(f"工作流开始: {data['id']}")
-
-            def on_node_finished(data):
-                print(f"节点完成: {data['node_id']}, 状态: {data['status']}")
-
-            def on_workflow_finished(data):
-                print(f"工作流完成: {data['id']}, 状态: {data['status']}")
-
-            client = ChatflowClient(api_key)
-            stream = client.send_message(
-                query="你好，请介绍一下自己",
-                user="user123",
-                response_mode="streaming"
-            )
-            result = client.process_streaming_response(
-                stream,
-                handle_message=on_message,
-                handle_workflow_started=on_workflow_started,
-                handle_node_finished=on_node_finished,
-                handle_workflow_finished=on_workflow_finished
-            )
-            ```
-        """
-        result = {"workflow_data": {}, "nodes_data": []}
-        answer_chunks = []
-
-        for chunk in stream_generator:
-            event = chunk.get("event")
-
-            if event == "message" and handle_message:
-                handle_message(chunk)
-                # 累积回答内容
-                if "answer" in chunk:
-                    answer_chunks.append(chunk["answer"])
-                # 保存消息和会话ID
-                if "message_id" in chunk and not result.get("message_id"):
-                    result["message_id"] = chunk["message_id"]
-                if "conversation_id" in chunk and not result.get("conversation_id"):
-                    result["conversation_id"] = chunk["conversation_id"]
-                if "task_id" in chunk and not result.get("task_id"):
-                    result["task_id"] = chunk["task_id"]
-
-            elif event == "message_file" and handle_message_file:
-                handle_message_file(chunk)
-
-            elif event == "message_end" and handle_message_end:
-                if handle_message_end:
-                    handle_message_end(chunk)
-                # 保存元数据
-                if "metadata" in chunk:
-                    result["metadata"] = chunk["metadata"]
-                if "message_id" in chunk and not result.get("message_id"):
-                    result["message_id"] = chunk["message_id"]
-                if "conversation_id" in chunk and not result.get("conversation_id"):
-                    result["conversation_id"] = chunk["conversation_id"]
-
-            elif event == "tts_message" and handle_tts_message:
-                handle_tts_message(chunk)
-
-            elif event == "tts_message_end" and handle_tts_message_end:
-                handle_tts_message_end(chunk)
-
-            elif event == "message_replace" and handle_message_replace:
-                handle_message_replace(chunk)
-                # 替换回答内容
-                if "answer" in chunk:
-                    answer_chunks = [chunk["answer"]]
-
-            elif event == "workflow_started" and handle_workflow_started:
-                if "workflow_run_id" in chunk:
-                    result["workflow_run_id"] = chunk["workflow_run_id"]
-                if "data" in chunk:
-                    result["workflow_data"] = chunk["data"]
-                if handle_workflow_started:
-                    handle_workflow_started(chunk.get("data", {}))
-
-            elif event == "node_started" and handle_node_started:
-                if handle_node_started:
-                    handle_node_started(chunk.get("data", {}))
-
-            elif event == "node_finished" and handle_node_finished:
-                if handle_node_finished:
-                    data = chunk.get("data", {})
-                    handle_node_finished(data)
-                    # 收集节点数据
-                    result["nodes_data"].append(data)
-
-            elif event == "workflow_finished" and handle_workflow_finished:
-                if handle_workflow_finished:
-                    data = chunk.get("data", {})
-                    handle_workflow_finished(data)
-                    # 更新工作流数据
-                    result["workflow_data"].update(data)
-
-            elif event == "error" and handle_error:
-                handle_error(chunk)
-                if break_on_error:
-                    # 添加错误信息到结果中
-                    result["error"] = {
-                        "status": chunk.get("status"),
-                        "code": chunk.get("code"),
-                        "message": chunk.get("message"),
-                    }
-                    break
-
-            elif event == "ping" and handle_ping:
-                handle_ping(chunk)
-
-        # 合并所有回答块
-        if answer_chunks:
-            result["answer"] = "".join(answer_chunks)
-
-        return result
+    
