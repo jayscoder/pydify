@@ -28,7 +28,7 @@ Pydify 提供了一个简洁、易用的接口，用于访问 Dify 平台的各�
 - 🔄 **Workflow 工作流应用**：执行工作流、处理流式响应、文件上传等
 - 🤖 **Agent 对话型应用**：迭代式规划推理、自主工具调用，直至完成任务目标的智能助手
 - 📝 **Text Generation 文本生成应用**：单轮文本生成，适合翻译、文章写作、总结等 AI 任务
-- 🧩 **Chatflow 工作流编排对话型应用**：基于工作流编排的多轮对话，支持复杂流程定义，具有记忆功能
+- 🔧 **DifySite 管理工具**：自动化管理 Dify 平台的应用、API 密钥等
 
 ## 安装
 
@@ -82,22 +82,15 @@ stream = client.send_message(
 )
 
 # 处理流式响应
-def on_message(chunk):
-    print(chunk["answer"], end="", flush=True)  # 实时打印文本块
-
-def on_message_end(chunk):
-    print("\n\n消息回复完成！")
-    # 获取令牌使用信息
-    if "metadata" in chunk and "usage" in chunk["metadata"]:
-        usage = chunk["metadata"]["usage"]
-        print(f"Token使用: {usage}")
-
-# 处理流式响应
-result = client.process_streaming_response(
-    stream,
-    handle_message=on_message,
-    handle_message_end=on_message_end
-)
+for chunk in stream:
+    event = chunk.get("event")
+    if event == "message":
+        print(chunk.get("answer", ""), end="", flush=True)
+    elif event == "message_end":
+        print("\n\n消息回复完成！")
+        if "metadata" in chunk and "usage" in chunk["metadata"]:
+            usage = chunk["metadata"]["usage"]
+            print(f"Token使用: {usage}")
 ```
 
 #### 多轮对话
@@ -243,17 +236,11 @@ for question in suggestions["data"]:
     print(f"推荐问题: {question}")
 
 # 停止响应（针对流式模式）
-client.stop_response(
+client.stop_task(
     task_id="task_id_from_stream",
     user="user_123"
 )
-
-# 获取应用Meta信息
-meta_info = client.get_meta()
-print(f"工具图标: {meta_info.get('tool_icons', {})}")
 ```
-
-更多示例请参阅 [examples/chatbot_example.py](examples/chatbot_example.py)。
 
 ### AgentClient
 
@@ -263,6 +250,7 @@ AgentClient 用于与 Dify 的 Agent 应用交互。Agent 是能够迭代式规�
 
 ```python
 from pydify import AgentClient
+from pydify.agent import AgentEvent  # 导入事件类型
 
 # 初始化客户端
 client = AgentClient(
@@ -299,41 +287,24 @@ for chunk in stream:
 
 #### 流式响应处理
 
-Agent 应用有特殊的事件类型，用于处理智能体的思考过程和工具调用：
-
 ```python
-# 定义处理函数
-def on_agent_message(chunk):
-    print(chunk.get("answer", ""), end="", flush=True)
-
-def on_agent_thought(chunk):
-    print(f"\n\n[Agent思考] {chunk.get('position')}:")
-    print(f"思考: {chunk.get('thought')}")
-    print(f"工具: {chunk.get('tool')}")
-    print(f"输入: {chunk.get('tool_input')}")
-    print(f"观察: {chunk.get('observation')}\n")
-
-def on_message_end(chunk):
-    print("\n\n消息完成！")
-    if "metadata" in chunk and "usage" in chunk["metadata"]:
-        usage = chunk["metadata"]["usage"]
-        print(f"Token使用: {usage}")
-
-# 流式模式发送消息
+# 发送消息
 stream = client.send_message(
     query="帮我分析最近的经济数据，预测下个季度的趋势",
     user="user_123"
 )
 
-# 处理流式响应
-result = client.process_streaming_response(
-    stream,
-    handle_agent_message=on_agent_message,
-    handle_agent_thought=on_agent_thought,
-    handle_message_end=on_message_end
-)
-
-print(f"Agent思考步骤数: {len(result.get('agent_thoughts', []))}")
+# 简单的事件处理
+for chunk in stream:
+    event = chunk.get("event")
+    if event == AgentEvent.AGENT_MESSAGE:
+        print(chunk.get("answer", ""), end="", flush=True)
+    elif event == AgentEvent.AGENT_THOUGHT:
+        print(f"\n\n[思考] {chunk.get('thought')}")
+        print(f"[工具] {chunk.get('tool')}")
+        print(f"[观察] {chunk.get('observation')}\n")
+    elif event == AgentEvent.MESSAGE_END:
+        print("\n\n回答完成！")
 ```
 
 #### 多轮对话
@@ -344,27 +315,23 @@ stream1 = client.send_message(
     query="帮我找出最适合初学者的编程语言",
     user="user_123"
 )
-result1 = client.process_streaming_response(
-    stream1,
-    handle_agent_message=lambda chunk: print(chunk.get("answer", ""), end="")
-)
-conversation_id = result1["conversation_id"]
+# 处理第一轮对话的响应...
+conversation_id = None
+for chunk in stream1:
+    if chunk.get("event") == "message_end":
+        conversation_id = chunk.get("conversation_id")
 
 # 第二轮对话（基于之前的上下文）
-stream2 = client.send_message(
-    query="我想学习你推荐的第一种语言，有什么好的学习资源？",
-    user="user_123",
-    conversation_id=conversation_id  # 使用第一轮返回的会话ID
-)
-client.process_streaming_response(
-    stream2,
-    handle_agent_message=lambda chunk: print(chunk.get("answer", ""), end="")
-)
+if conversation_id:
+    stream2 = client.send_message(
+        query="我想学习你推荐的第一种语言，有什么好的学习资源？",
+        user="user_123",
+        conversation_id=conversation_id  # 使用第一轮返回的会话ID
+    )
+    # 处理第二轮对话的响应...
 ```
 
 #### 会话管理
-
-Agent 应用与 Chatbot 一样支持会话管理功能：
 
 ```python
 # 获取会话列表
@@ -378,13 +345,6 @@ messages = client.get_messages(
     conversation_id="conversation_id",
     user="user_123"
 )
-for msg in messages["data"]:
-    if "agent_thoughts" in msg:
-        thoughts = msg["agent_thoughts"]
-        print(f"Agent思考步骤: {len(thoughts)}个")
-        for thought in thoughts:
-            print(f"- 思考: {thought.get('thought')}")
-            print(f"  工具: {thought.get('tool')}")
 
 # 重命名会话
 client.rename_conversation(
@@ -400,65 +360,15 @@ client.delete_conversation(
 )
 ```
 
-#### 图片分析功能
-
-```python
-# 上传图片文件
-file_result = client.upload_file(
-    file_path="chart.png",
-    user="user_123"
-)
-file_id = file_result["id"]
-
-# 发送带图片的消息，让Agent分析图片
-stream = client.send_message(
-    query="请分析这张图表，告诉我主要趋势",
-    user="user_123",
-    files=[{
-        "type": "image",
-        "transfer_method": "local_file",
-        "upload_file_id": file_id
-    }]
-)
-
-# 处理Agent对图片的分析
-client.process_streaming_response(
-    stream,
-    handle_agent_message=lambda chunk: print(chunk.get("answer", ""), end="")
-)
-```
-
-#### 反馈与推荐问题
-
-```python
-# 对消息进行反馈
-client.message_feedback(
-    message_id="message_id_from_response",
-    user="user_123",
-    rating="like",  # "like"或"dislike"
-    content="Agent的分析非常深入，感谢！"
-)
-
-# 获取推荐问题
-suggestions = client.get_suggested_questions(
-    message_id="message_id_from_response",
-    user="user_123"
-)
-```
-
 #### 停止正在进行的任务
-
-Agent 处理复杂任务可能需要较长时间，可以中途停止：
 
 ```python
 # 停止响应
-client.stop_response(
+client.stop_task(
     task_id="task_id_from_stream",
     user="user_123"
 )
 ```
-
-更多示例请参阅 [examples/agent_example.py](examples/agent_example.py)。
 
 ### TextGenerationClient
 
@@ -468,6 +378,7 @@ TextGenerationClient 用于与 Dify 的 Text Generation 应用交互。Text Gene
 
 ```python
 from pydify import TextGenerationClient
+from pydify.text_generation import TextGenerationEvent  # 导入事件类型
 
 # 初始化客户端
 client = TextGenerationClient(
@@ -482,7 +393,6 @@ print(f"应用名称: {app_info['name']}")
 # 获取应用参数
 params = client.get_parameters()
 print(f"支持的功能: {params.get('features', [])}")
-print(f"输入表单: {params.get('user_input_form', [])}")
 
 # 发送请求（阻塞模式）
 response = client.completion(
@@ -497,18 +407,6 @@ print(f"生成内容: {response['answer']}")
 #### 流式响应处理
 
 ```python
-# 处理函数
-def on_message(chunk):
-    print(chunk.get("answer", ""), end="", flush=True)
-
-def on_message_end(chunk):
-    print("\n\n生成完成！")
-    if "metadata" in chunk and "usage" in chunk["metadata"]:
-        usage = chunk["metadata"]["usage"]
-        print(f"Token使用情况: 输入={usage.get('prompt_tokens', 0)}, "
-              f"输出={usage.get('completion_tokens', 0)}, "
-              f"总计={usage.get('total_tokens', 0)}")
-
 # 发送流式请求
 stream = client.completion(
     query="请写一首关于春天的诗",
@@ -517,11 +415,15 @@ stream = client.completion(
 )
 
 # 处理流式响应
-result = client.process_streaming_response(
-    stream,
-    handle_message=on_message,
-    handle_message_end=on_message_end
-)
+for chunk in stream:
+    event = chunk.get("event")
+    if event == TextGenerationEvent.MESSAGE:
+        print(chunk.get("answer", ""), end="", flush=True)
+    elif event == TextGenerationEvent.MESSAGE_END:
+        print("\n\n生成完成！")
+        if "metadata" in chunk and "usage" in chunk["metadata"]:
+            usage = chunk["metadata"]["usage"]
+            print(f"Token使用: {usage}")
 ```
 
 #### 使用自定义输入
@@ -529,7 +431,6 @@ result = client.process_streaming_response(
 ```python
 # 假设应用定义了一些变量，如：主题(topic)、风格(style)、字数(word_count)
 inputs = {
-    "query": "帮我写一篇文章",  # 基本查询
     "topic": "人工智能",        # 主题
     "style": "科普",           # 风格
     "word_count": 500          # 字数要求
@@ -541,44 +442,6 @@ response = client.completion(
     user="user_123",
     inputs=inputs,
     response_mode="blocking"
-)
-```
-
-#### 专业任务示例
-
-```python
-# 翻译任务
-translation_result = client.completion(
-    query="将文本翻译成英文",
-    user="user_123",
-    inputs={
-        "text_to_translate": "人工智能是模拟人类智能的科学与技术",
-        "target_language": "english"
-    },
-    response_mode="blocking"
-)
-
-# 文本摘要任务
-summary_result = client.completion(
-    query="请对以下文本进行摘要",
-    user="user_123",
-    inputs={
-        "text_to_summarize": "一段很长的文本...",
-        "max_length": 150
-    },
-    response_mode="blocking"
-)
-```
-
-#### 反馈功能
-
-```python
-# 对生成结果进行反馈
-client.message_feedback(
-    message_id="message_id_from_response",
-    user="user_123",
-    rating="like",  # "like"或"dislike"
-    content="生成的文章非常符合要求，感谢！"  # 可选
 )
 ```
 
@@ -606,233 +469,25 @@ response = client.completion(
 print(f"图片描述: {response['answer']}")
 ```
 
-#### 文字转语音
-
-```python
-# 从文本生成语音
-audio_result = client.text_to_audio(
-    user="user_123",
-    text="这段文字将被转换为语音"
-)
-
-# 从生成结果ID生成语音
-audio_result = client.text_to_audio(
-    user="user_123",
-    message_id="message_id_from_response"
-)
-```
-
 #### 停止生成
 
 ```python
 # 停止正在进行的生成任务
-client.stop_completion(
+client.stop_task(
     task_id="task_id_from_stream",
     user="user_123"
 )
 ```
-
-更多示例请参阅 [examples/text_generation_example.py](examples/text_generation_example.py)。
-
-### ChatflowClient
-
-ChatflowClient 用于与 Dify 的 Chatflow 应用交互。Chatflow 是基于工作流编排的对话型应用，适用于定义复杂流程的多轮对话场景，具有记忆功能。
-
-#### 基本用法
-
-```python
-from pydify import ChatflowClient
-
-# 初始化客户端
-client = ChatflowClient(
-    api_key="your_dify_api_key",
-    base_url="https://your-dify-instance.com/v1"  # 可选，默认使用 DIFY_BASE_URL 环境变量
-)
-
-# 获取应用信息
-app_info = client.get_app_info()
-print(f"应用名称: {app_info['name']}")
-
-# 获取应用参数
-params = client.get_parameters()
-print(f"开场白: {params.get('opening_statement', '')}")
-
-# 发送消息（阻塞模式）
-response = client.send_message(
-    query="你好，请介绍一下工作流编排",
-    user="user_123",  # 用户唯一标识
-    response_mode="blocking"  # 阻塞模式，等待回复完成
-)
-print(f"AI回答: {response['answer']}")
-print(f"会话ID: {response['conversation_id']}")
-```
-
-#### 流式响应处理
-
-Chatflow 应用支持工作流相关的事件处理，可以监控工作流和节点的执行过程：
-
-```python
-# 流式模式发送消息
-stream = client.send_message(
-    query="分析人工智能的发展趋势",
-    user="user_123",
-    response_mode="streaming"  # 流式模式
-)
-
-# 消息处理函数
-def on_message(chunk):
-    print(chunk.get("answer", ""), end="", flush=True)
-
-def on_message_end(chunk):
-    print("\n消息完成！")
-
-# 工作流事件处理函数
-def on_workflow_started(data):
-    print(f"\n工作流开始: ID={data.get('id')}")
-
-def on_node_started(data):
-    print(f"节点开始: ID={data.get('node_id')}, 类型={data.get('node_type')}")
-
-def on_node_finished(data):
-    print(f"节点完成: ID={data.get('node_id')}, 状态={data.get('status')}")
-    if data.get('outputs'):
-        print(f"  输出: {data.get('outputs')}")
-
-def on_workflow_finished(data):
-    print(f"工作流完成: ID={data.get('id')}, 状态={data.get('status')}")
-    if data.get('outputs'):
-        print(f"  最终输出: {data.get('outputs')}")
-
-# 处理流式响应
-result = client.process_streaming_response(
-    stream,
-    handle_message=on_message,
-    handle_message_end=on_message_end,
-    handle_workflow_started=on_workflow_started,
-    handle_node_started=on_node_started,
-    handle_node_finished=on_node_finished,
-    handle_workflow_finished=on_workflow_finished
-)
-
-print(f"工作流运行ID: {result.get('workflow_run_id')}")
-print(f"执行的节点数量: {len(result.get('nodes_data', []))}")
-```
-
-#### 多轮对话
-
-```python
-# 第一轮对话
-response1 = client.send_message(
-    query="什么是工作流编排？",
-    user="user_123",
-    response_mode="blocking"
-)
-conversation_id = response1["conversation_id"]
-print(f"AI: {response1['answer']}")
-
-# 第二轮对话（基于之前的上下文）
-response2 = client.send_message(
-    query="能给我举个工作流编排的实际应用例子吗？",
-    user="user_123",
-    conversation_id=conversation_id,  # 使用第一轮返回的会话ID
-    response_mode="blocking"
-)
-print(f"AI: {response2['answer']}")
-```
-
-#### 会话管理
-
-Chatflow 应用与 Chatbot 一样支持会话管理功能：
-
-```python
-# 获取会话列表
-conversations = client.get_conversations(
-    user="user_123",
-    limit=5  # 获取最近5条会话
-)
-
-# 获取会话历史消息
-messages = client.get_messages(
-    conversation_id="conversation_id",
-    user="user_123",
-    limit=10  # 获取最近10条消息
-)
-
-# 重命名会话
-client.rename_conversation(
-    conversation_id="conversation_id",
-    user="user_123",
-    name="工作流编排讨论"  # 手动指定名称
-)
-
-# 删除会话
-client.delete_conversation(
-    conversation_id="conversation_id",
-    user="user_123"
-)
-```
-
-#### 文件与多模态功能
-
-```python
-# 上传文件
-file_result = client.upload_file(
-    file_path="document.pdf",
-    user="user_123"
-)
-file_id = file_result["id"]
-
-# 发送带文件的消息
-response = client.send_message(
-    query="请分析这个文档",
-    user="user_123",
-    files=[{
-        "type": "document",
-        "transfer_method": "local_file",
-        "upload_file_id": file_id
-    }],
-    response_mode="blocking"
-)
-```
-
-#### 消息反馈与推荐问题
-
-```python
-# 对消息进行反馈
-client.message_feedback(
-    message_id="message_id_from_response",
-    user="user_123",
-    rating="like",  # "like"或"dislike"
-    content="这个工作流分析很到位！"  # 可选
-)
-
-# 获取推荐问题
-suggestions = client.get_suggested_questions(
-    message_id="message_id_from_response",
-    user="user_123"
-)
-```
-
-#### 停止正在进行的任务
-
-```python
-# 停止响应
-client.stop_response(
-    task_id="task_id_from_stream",
-    user="user_123"
-)
-```
-
-更多示例请参阅 [examples/chatflow_example.py](examples/chatflow_example.py)。
 
 ### WorkflowClient
 
-WorkflowClient 用于与 Dify 的 Workflow 应用交互。Workflow 应用无会话支持，适合用于翻译、文章写作、文本总结等 AI 任务。
+WorkflowClient 用于与 Dify 的 Workflow 应用交互。Workflow 应用无会话支持，专注于执行预定义的工作流程。
 
 #### 基本用法
 
 ```python
 from pydify import WorkflowClient
+from pydify.workflow import WorkflowEvent  # 导入事件类型
 
 # 初始化客户端
 client = WorkflowClient(
@@ -846,7 +501,7 @@ print(f"应用名称: {app_info['name']}")
 
 # 准备输入参数
 inputs = {
-    "input": "请写一首关于人工智能的诗",
+    "prompt": "请写一首关于人工智能的诗",
 }
 
 # 执行工作流（阻塞模式）
@@ -861,33 +516,36 @@ print("工作流执行结果:")
 print(result)
 ```
 
-#### 流式响应处理
+#### 流式模式执行工作流
 
 ```python
-# 流式模式执行工作流
+# 流式执行工作流
 stream = client.run(
-    inputs={"prompt": "给我列出5种编程语言及其特点"},
+    inputs={"prompt": "分析当前市场趋势"},
     user="user_123",
-    response_mode="streaming"  # 流式模式，实时获取工作流执行进度
+    response_mode="streaming"
 )
 
 # 处理流式响应
-def on_workflow_started(data):
-    print(f"工作流开始: {data['id']}")
+for chunk in stream:
+    event = chunk.get("event")
 
-def on_node_finished(data):
-    print(f"节点完成: {data['node_id']}, 状态: {data['status']}")
+    if event == WorkflowEvent.WORKFLOW_STARTED:
+        print(f"工作流开始：{chunk['data']['id']}")
 
-def on_workflow_finished(data):
-    print(f"工作流完成: {data['id']}, 状态: {data['status']}")
+    elif event == WorkflowEvent.NODE_STARTED:
+        print(f"节点开始：{chunk['data']['title']}")
 
-# 处理流式响应
-result = client.process_streaming_response(
-    stream,
-    handle_workflow_started=on_workflow_started,
-    handle_node_finished=on_node_finished,
-    handle_workflow_finished=on_workflow_finished
-)
+    elif event == WorkflowEvent.NODE_FINISHED:
+        node_data = chunk['data']
+        print(f"节点完成：{node_data.get('id')}")
+        if 'outputs' in node_data:
+            print(f"  输出：{node_data['outputs']}")
+
+    elif event == WorkflowEvent.WORKFLOW_FINISHED:
+        print(f"工作流完成：{chunk['data']['id']}")
+        if 'outputs' in chunk['data']:
+            print(f"最终结果：{chunk['data']['outputs']}")
 ```
 
 #### 文件上传与使用
@@ -910,23 +568,107 @@ result = client.run(
 )
 ```
 
-#### 停止正在执行的任务
+#### 停止正在执行的任务与获取日志
 
 ```python
 # 停止任务
 client.stop_task(task_id="task_id_from_stream", user="user_123")
-```
 
-#### 获取工作流日志
-
-```python
 # 获取工作流执行日志
 logs = client.get_logs(limit=10)
 for log in logs["data"]:
     print(f"工作流 {log['id']} 状态: {log['workflow_run']['status']}")
 ```
 
-更多示例请参阅 [examples/workflow_example.py](examples/workflow_example.py)。
+### DifySite 管理工具
+
+DifySite 类提供了与 Dify 平台管理 API 的直接交互能力，用于自动化管理应用、API 密钥等后台任务。与其他客户端不同，DifySite 需要使用用户账户登录凭据而非 API 密钥。
+
+#### 初始化与登录
+
+```python
+from pydify.site import DifySite, DifyAppMode
+
+# 初始化DifySite实例（初始化时会自动登录并获取令牌）
+site = DifySite(
+    base_url="http://your-dify-instance.com",  # Dify平台地址
+    email="your-email@example.com",            # 登录邮箱
+    password="your-password"                   # 登录密码
+)
+# 登录成功后，site.access_token和site.refresh_token已自动填充
+```
+
+#### 应用管理
+
+```python
+# 获取所有应用
+apps = site.fetch_apps(limit=10)  # 获取前10个应用
+for app in apps['data']:
+    print(f"应用: {app['name']} (ID: {app['id']}, 模式: {app['mode']})")
+
+# 获取所有应用（自动处理分页）
+all_apps = site.fetch_all_apps()
+print(f"共有{len(all_apps)}个应用")
+
+# 获取特定应用详情
+app_details = site.fetch_app("your-app-id")
+print(f"应用名称: {app_details['name']}")
+print(f"应用模式: {app_details['mode']}")
+
+# 创建新应用
+new_app = site.create_app(
+    name="测试应用",
+    description="通过API创建的测试应用",
+    mode=DifyAppMode.CHAT  # 聊天助手应用
+)
+print(f"创建成功! 应用ID: {new_app['id']}")
+
+# 删除应用
+site.delete_app("your-app-id")
+```
+
+#### DSL 配置导入导出
+
+```python
+# 导出应用DSL配置
+dsl = site.fetch_app_dsl("your-app-id")
+
+# 将DSL保存到文件
+with open("app_backup.yaml", "w") as f:
+    f.write(dsl)
+
+# 导入应用DSL配置（创建新应用）
+with open("app_backup.yaml", "r") as f:
+    dsl_content = f.read()
+
+imported_app = site.import_app_dsl(dsl_content)
+print(f"导入成功! 新应用ID: {imported_app['id']}")
+
+# 导入应用DSL配置（更新现有应用）
+site.import_app_dsl(dsl_content, app_id="existing-app-id")
+```
+
+#### API 密钥管理
+
+```python
+# 获取应用的API密钥列表
+api_keys = site.fetch_app_api_keys("your-app-id")
+print(f"应用共有{len(api_keys)}个API密钥")
+
+# 创建新的API密钥
+new_key = site.create_app_api_key("your-app-id")
+print(f"新API密钥: {new_key['token']}")
+
+# 删除API密钥
+site.delete_app_api_key("your-app-id", "api-key-id")
+```
+
+#### 其他功能
+
+```python
+# 在浏览器中打开应用
+site.jump_to_app("your-app-id", DifyAppMode.CHAT)
+```
 
 ## 贡献
 
