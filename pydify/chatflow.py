@@ -9,8 +9,10 @@ import json
 import mimetypes
 import os
 from typing import Any, BinaryIO, Dict, Generator, List, Optional, Tuple, Union
-from .common import DifyBaseClient, DifyType
+
 from .chatbot import ChatbotClient
+from .common import DifyBaseClient, DifyType
+
 
 class ChatflowEvent:
     """事件类型枚举
@@ -30,7 +32,6 @@ class ChatflowEvent:
     WORKFLOW_FINISHED = "workflow_finished"  # workflow执行结束事件（包含成功/失败状态）
     ERROR = "error"  # 流式输出过程中出现的异常事件
     PING = "ping"  # 保持连接存活的ping事件，每10秒一次
-    
 
 
 class ChatflowClient(ChatbotClient):
@@ -118,7 +119,7 @@ class ChatflowClient(ChatbotClient):
         endpoint = f"chat-messages/{task_id}/stop"
         payload = {"user": user}
         return self.post(endpoint, json_data=payload)
-    
+
     def get_suggested_questions(
         self, message_id: str, user: str, **kwargs
     ) -> Dict[str, Any]:
@@ -132,7 +133,7 @@ class ChatflowClient(ChatbotClient):
 
         Returns:
             Dict[str, Any]: 建议问题列表
-        
+
         Raises:
             DifyAPIError: 当API请求失败时
         """
@@ -419,4 +420,3 @@ class ChatflowClient(ChatbotClient):
             requests.HTTPError: 当API请求失败时
         """
         return self.get("meta")
-    

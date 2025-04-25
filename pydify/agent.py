@@ -10,8 +10,10 @@ import mimetypes
 import os
 from typing import Any, BinaryIO, Dict, Generator, List, Optional, Tuple, Union
 
-from .common import DifyBaseClient, DifyType
 from .chatbot import ChatbotClient
+from .common import DifyBaseClient, DifyType
+
+
 class AgentEvent:
     """事件类型枚举
 
@@ -28,7 +30,7 @@ class AgentEvent:
     MESSAGE_REPLACE = "message_replace"  # 消息内容替换事件，用于内容审查后的替换
     ERROR = "error"  # 流式输出过程中出现的异常事件
     PING = "ping"  # 保持连接存活的ping事件，每10秒一次
-    
+
 
 class AgentClient(ChatbotClient):
     """Dify Agent应用客户端类。
@@ -38,11 +40,11 @@ class AgentClient(ChatbotClient):
     """
 
     type = DifyType.Agent
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.task_id = None
-        
+
     def send_message(
         self,
         query: str,
@@ -53,7 +55,7 @@ class AgentClient(ChatbotClient):
         files: List[Dict[str, Any]] = None,
         auto_generate_name: bool = True,
         **kwargs,  # 添加kwargs参数，用于接收额外的请求参数
-    ) -> Generator[Dict[str, Any], None, None] | Dict[str, Any]:
+    ) -> Union[Generator[Dict[str, Any], None, None], Dict[str, Any]]:
         """
         发送对话消息，创建会话消息。在Agent模式下，只支持streaming流式模式。
 
@@ -76,7 +78,7 @@ class AgentClient(ChatbotClient):
         """
         if response_mode != "streaming":
             raise ValueError("Agent mode only supports streaming response mode")
-        
+
         payload = {
             "query": query,
             "user": user,
@@ -116,7 +118,7 @@ class AgentClient(ChatbotClient):
         endpoint = f"chat-messages/{task_id}/stop"
         payload = {"user": user}
         return self.post(endpoint, json_data=payload)
-    
+
     def get_meta(self) -> Dict[str, Any]:
         """
         获取应用Meta信息，用于获取工具icon等。
@@ -128,4 +130,3 @@ class AgentClient(ChatbotClient):
             requests.HTTPError: 当API请求失败时
         """
         return self.get("meta")
-    

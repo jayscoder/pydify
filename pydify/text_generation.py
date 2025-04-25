@@ -11,7 +11,6 @@ from typing import Any, Dict, Generator, List, Optional, Union
 from .common import DifyBaseClient, DifyType
 
 
-
 class TextGenerationEvent:
     """事件类型枚举
 
@@ -99,7 +98,7 @@ class TextGenerationEvent:
             "event": "ping",
         }
     """
-    
+
     MESSAGE = "message"  # LLM返回文本块事件
     MESSAGE_END = "message_end"  # 消息结束事件
     TTS_MESSAGE = "tts_message"  # TTS音频流事件
@@ -107,8 +106,8 @@ class TextGenerationEvent:
     MESSAGE_REPLACE = "message_replace"  # 消息内容替换事件
     ERROR = "error"  # 异常事件
     PING = "ping"  # 保持连接存活的ping事件
-    
-    
+
+
 class TextGenerationClient(DifyBaseClient):
     """Dify Text Generation应用客户端类。
 
@@ -154,7 +153,7 @@ class TextGenerationClient(DifyBaseClient):
         # 准备inputs，确保包含query
         if inputs is None:
             inputs = {}
-        
+
         inputs["query"] = query
         payload = {
             "inputs": inputs,

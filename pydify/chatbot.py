@@ -11,6 +11,7 @@ from typing import Any, Dict, Generator, List, Optional, Union
 
 from .common import DifyBaseClient, DifyType
 
+
 class ChatbotEvent:
     """事件类型枚举
 
@@ -98,7 +99,7 @@ class ChatbotEvent:
             "event": "ping",
         }
     """
-    
+
     MESSAGE = "message"  # LLM返回文本块事件
     AGENT_MESSAGE = "agent_message"  # Agent模式下返回文本块事件
     AGENT_THOUGHT = "agent_thought"  # Agent思考步骤相关内容
@@ -109,7 +110,6 @@ class ChatbotEvent:
     MESSAGE_REPLACE = "message_replace"  # 消息内容替换事件
     ERROR = "error"  # 异常事件
     PING = "ping"  # 保持连接存活的ping事件
-    
 
 
 class ChatbotClient(DifyBaseClient):
@@ -172,18 +172,18 @@ class ChatbotClient(DifyBaseClient):
 
         if files:
             payload["files"] = files
-        
+
         endpoint = "chat-messages"
-        
+
         # 打印请求信息，便于调试
         print(f"请求URL: {self.base_url}{endpoint}")
         print(f"请求参数: {json.dumps(payload)}")
-        
+
         if response_mode == "streaming":
             return self.post_stream(endpoint, json_data=payload, **kwargs)
         else:
             return self.post(endpoint, json_data=payload, **kwargs)
-    
+
     def stop_task(self, task_id: str, user: str) -> Dict[str, Any]:
         """
         停止正在进行的响应，仅支持流式模式。
@@ -282,11 +282,13 @@ class ChatbotClient(DifyBaseClient):
             "POST", endpoint, headers=headers, files=files, data=data
         )
         return response.json()
-    
-    def get_messages(self, conversation_id: str, user: str, first_id: str = None, limit: int = 20) -> Dict[str, Any]:
+
+    def get_messages(
+        self, conversation_id: str, user: str, first_id: str = None, limit: int = 20
+    ) -> Dict[str, Any]:
         """
         获取会话消息列表，支持分页加载历史聊天记录。
-        
+
         Args:
             conversation_id (str): 会话ID，用于标识特定的对话会话
             user (str): 用户标识，由开发者定义规则，需保证用户标识在应用内唯一
@@ -335,7 +337,7 @@ class ChatbotClient(DifyBaseClient):
             DifyAPIError: 当API请求失败时
         """
         endpoint = "messages"
-        
+
         params = {
             "conversation_id": conversation_id,
             "user": user,

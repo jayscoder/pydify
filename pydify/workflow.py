@@ -10,12 +10,13 @@ from typing import Any, BinaryIO, Dict, Generator, List, Optional, Tuple, Union
 
 from .common import DifyAPIError, DifyBaseClient, DifyType
 
+
 class WorkflowEvent:
     """事件类型枚举
 
     定义了Dify API中可能的事件类型，用于处理流式响应中的事件。
     """
-    
+
     WORKFLOW_STARTED = "workflow_started"  # workflow开始执行事件
     NODE_STARTED = "node_started"  # 节点开始执行事件
     NODE_FINISHED = "node_finished"  # 节点执行结束事件（包含成功/失败状态）
@@ -24,8 +25,8 @@ class WorkflowEvent:
     TTS_MESSAGE_END = "tts_message_end"  # TTS音频流结束事件
     PING = "ping"  # 保持连接存活的ping事件，每10秒一次
     TEXT_CHUNK = "text_chunk"  # 文本块事件，包含文本内容
-    ERROR = 'error'
-    
+    ERROR = "error"
+
     """
     定义了Dify Workflow API中可能的事件类型，用于处理流式响应中的事件。
 
@@ -108,7 +109,6 @@ class WorkflowEvent:
     """
 
 
-
 class WorkflowClient(DifyBaseClient):
     """Dify Workflow应用客户端类。
 
@@ -127,7 +127,7 @@ class WorkflowClient(DifyBaseClient):
     ) -> Union[Dict[str, Any], Generator[Dict[str, Any], None, None]]:
         """
         执行工作流。
-        
+
         Args:
             inputs (Dict[str, Any]): 必需参数。包含工作流所需的输入变量键值对。
                                    每个键对应一个工作流定义中的变量名称，值为该变量的具体内容。
@@ -294,9 +294,9 @@ class WorkflowClient(DifyBaseClient):
         endpoint = f"workflows/tasks/{task_id}/stop"
         payload = {"user": user}
         return self.post(endpoint, json_data=payload, **kwargs)
-    
+
     def get_run_info(self, workflow_id: str, **kwargs) -> Dict[str, Any]:
-        '''
+        """
         获取工作流执行信息
         id (string) workflow 执行 ID
         workflow_id (string) 关联的 Workflow ID
@@ -309,10 +309,10 @@ class WorkflowClient(DifyBaseClient):
         created_at (timestamp) 任务开始时间
         finished_at (timestamp) 任务结束时间
         elapsed_time (float) 耗时(s)
-        '''
+        """
         endpoint = f"workflows/runs/{workflow_id}"
         return self.get(endpoint, **kwargs)
-    
+
     def get_logs(
         self,
         keyword: str = None,

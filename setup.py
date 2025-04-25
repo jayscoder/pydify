@@ -2,9 +2,7 @@ import os
 
 import setuptools
 
-# 优先读取README.rst，如果不存在则读取README.md
-# readme_file = "README.rst" if os.path.exists("README.rst") else "README.md"
-readme_file = "README.md"
+readme_file = "README.rst" if os.path.exists("README.rst") else "README.md"
 with open(readme_file, "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
@@ -16,6 +14,7 @@ long_description_content_type = (
 # 定义项目依赖
 install_requires = [
     "requests>=2.25.0",
+    "sseclient-py>=1.8.0",
 ]
 
 # 可选依赖
@@ -33,7 +32,7 @@ extras_require = {
 
 setuptools.setup(
     name="pydify",
-    version="2.0.0",
+    version="2.1.0",
     author="Dify SDK Team",
     author_email="example@domain.com",
     description="A Python SDK for interacting with Dify API",

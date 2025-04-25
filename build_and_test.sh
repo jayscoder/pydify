@@ -24,6 +24,10 @@ echo "=== 检查包 ==="
 pip install twine
 twine check dist/*
 
+git add -A
+git commit -m "build and test"
+git push
+
 echo "=== 完成! ==="
 echo "如果要发布到PyPI，请运行:"
 echo "twine upload dist/*"

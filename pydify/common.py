@@ -4,9 +4,12 @@ Pydify - 通用工具和基础类
 此模块提供了Dify API客户端的基础类和通用工具。
 """
 
+import datetime
 import json
 import mimetypes
 import os
+import re
+import time
 from typing import (
     Any,
     BinaryIO,
@@ -21,11 +24,9 @@ from typing import (
 from urllib.parse import urljoin
 
 import requests
-from requests.exceptions import JSONDecodeError as RequestsJSONDecodeError
-import time
 import sseclient
-import datetime
-import re
+from requests.exceptions import JSONDecodeError as RequestsJSONDecodeError
+
 
 class DifyType:
     """Dify应用类型枚举
@@ -39,7 +40,6 @@ class DifyType:
     Chatflow = "chatflow"
     Agent = "agent"
     TextGeneration = "text_generation"
-
 
 
 class DifyBaseClient:
@@ -79,7 +79,7 @@ class DifyBaseClient:
         self.base_url = (
             base_url or os.environ.get("DIFY_BASE_URL") or "https://api.dify.ai/v1"
         )
-        
+
         # 如果base_url不以斜杠结尾，则添加斜杠
         if not self.base_url.endswith("/"):
             self.base_url += "/"
@@ -131,12 +131,12 @@ class DifyBaseClient:
         url = urljoin(self.base_url, endpoint)
         headers = kwargs.pop("headers", {})
         headers.update(self._get_headers())
-        
+
         # 设置重试机制
         max_retries = kwargs.pop("max_retries", 2)
         retry_delay = kwargs.pop("retry_delay", 1)
         timeout = kwargs.pop("timeout", 30)
-        
+
         # 添加超时参数
         kwargs["timeout"] = timeout
 
@@ -147,19 +147,21 @@ class DifyBaseClient:
                 if not response.ok:
                     error_data = {}
                     error_details = ""
-                    
+
                     # 尝试解析错误数据
                     try:
                         error_data = response.json()
                         if isinstance(error_data, dict):
-                            if 'error' in error_data and isinstance(error_data['error'], dict):
-                                error_details = error_data['error'].get('message', '')
+                            if "error" in error_data and isinstance(
+                                error_data["error"], dict
+                            ):
+                                error_details = error_data["error"].get("message", "")
                             else:
-                                error_details = error_data.get('message', '')
+                                error_details = error_data.get("message", "")
                     except RequestsJSONDecodeError:
                         if response.text:
                             error_details = response.text[:500]
-                    
+
                     # 构建格式化的错误消息
                     error_msg = f"""
 PYDIFY:API请求失败: 
@@ -216,7 +218,7 @@ PYDIFY:API请求失败:
 
                 # 提供更友好的错误信息
                 error_type = type(e).__name__
-                
+
                 # 格式化的网络错误消息
                 error_msg = f"""
 PYDIFY:网络请求失败: 
@@ -237,8 +239,10 @@ PYDIFY:网络请求失败:
 3. 服务器是否可用
 4. SSL证书是否有效
 5. 超时设置是否合理: {1}秒
-""".format(self.base_url, timeout)
-                
+""".format(
+                    self.base_url, timeout
+                )
+
                 raise DifyAPIError(f"{error_msg}{suggestions}")
 
     def get(self, endpoint: str, **kwargs) -> Dict[str, Any]:
@@ -366,7 +370,7 @@ PYDIFY:网络请求失败:
         url = urljoin(self.base_url, endpoint)
         headers = kwargs.pop("headers", {})
         headers.update(self._get_headers())
-        
+
         # 设置重试机制
         max_retries = kwargs.pop("max_retries", 2)
         retry_delay = kwargs.pop("retry_delay", 1)
@@ -374,7 +378,7 @@ PYDIFY:网络请求失败:
 
         # 添加超时参数
         kwargs["timeout"] = timeout
-        
+
         with requests.post(
             url, json=json_data, headers=headers, stream=True, **kwargs
         ) as response:
@@ -382,10 +386,10 @@ PYDIFY:网络请求失败:
                 response.raise_for_status()
             except Exception as e:
                 try:
-                    error_data = response.content.decode('utf-8').strip('\n')
+                    error_data = response.content.decode("utf-8").strip("\n")
                     try:
                         error_json = json.loads(error_data)
-                        
+
                         # 构建格式化的错误消息
                         error_msg = f"""
 PYDIFY:流式请求失败: 
@@ -433,7 +437,7 @@ PYDIFY:流式请求失败:
    └─ {str(decode_error)}
 """
                     raise DifyAPIError(error_msg)
-                    
+
             try:
                 client = sseclient.SSEClient(response)
             except Exception as e:
@@ -449,7 +453,7 @@ PYDIFY:SSE客户端初始化失败:
    └─ 详情: {str(e)}
 """
                 raise DifyAPIError(error_msg)
-                
+
             # 处理SSE流式响应
             for event in client.events():
                 try:
@@ -469,9 +473,9 @@ PYDIFY:处理SSE流式响应时JSON解析错误:
    └─ {event.data[:500]}
 """
                     raise DifyAPIError(error_msg)
-    
+
     def stop_task(self, task_id: str, user: str) -> Dict[str, Any]:
-        '''
+        """
         停止任务
         仅支持流式模式。
         Args:
@@ -483,9 +487,9 @@ PYDIFY:处理SSE流式响应时JSON解析错误:
             {
                 "result": "success"  # 表示成功停止响应
             }
-        '''
+        """
         raise NotImplementedError("停止任务方法未实现")
-    
+
     # 通用方法 - 这些方法在多个子类中重复出现，可以移到基类
     def upload_file(self, file_path: str, user: str, **kwargs) -> Dict[str, Any]:
         """
@@ -594,19 +598,21 @@ PYDIFY:处理SSE流式响应时JSON解析错误:
             if not response.ok:
                 error_data = {}
                 error_details = ""
-                
+
                 # 尝试解析错误数据
                 try:
                     error_data = response.json()
                     if isinstance(error_data, dict):
-                        if 'error' in error_data and isinstance(error_data['error'], dict):
-                            error_details = error_data['error'].get('message', '')
+                        if "error" in error_data and isinstance(
+                            error_data["error"], dict
+                        ):
+                            error_details = error_data["error"].get("message", "")
                         else:
-                            error_details = error_data.get('message', '')
+                            error_details = error_data.get("message", "")
                 except:
                     if response.text:
                         error_details = response.text[:500]
-                
+
                 # 构建格式化的错误消息
                 error_msg = f"""
 PYDIFY:文件上传失败: 
@@ -645,7 +651,7 @@ PYDIFY:文件上传网络错误:
         except Exception as e:
             if isinstance(e, DifyAPIError):
                 raise
-                
+
             # 构建格式化的通用错误消息
             error_msg = f"""
 PYDIFY:文件上传失败: 
@@ -780,7 +786,7 @@ PYDIFY:文件上传失败:
         Args:
             raw (bool): 是否返回原始数据，默认为True
             **kwargs: 额外的请求参数，如timeout、max_retries等
-        
+
         Returns:
             Dict[str, Any]: 包含应用参数的字典，可能包含以下字段：
                 - opening_statement (str): 应用开场白文本
@@ -901,7 +907,7 @@ PYDIFY:文件上传失败:
 
         if raw:
             return params
-        
+
         # 对user_input_form进行处理，使其变成一个列表
         user_input_form = []
         for item in params["user_input_form"]:
@@ -1044,7 +1050,7 @@ PYDIFY:文件上传失败:
             payload["name"] = name
 
         return self.post(f"conversations/{conversation_id}/name", json_data=payload)
-    
+
     def get_suggested_questions(
         self, message_id: str, user: str, **kwargs
     ) -> Dict[str, Any]:
@@ -1093,7 +1099,7 @@ class DifyAPIError(Exception):
             # 如果错误信息中已经包含了状态码信息（通常是前面改进的错误格式），就直接返回消息
             if f"状态码: {self.status_code}" in self.message:
                 return self.message
-                
+
             # 否则，添加状态码信息
             if self.error_data:
                 return f"[状态码: {self.status_code}]\n{self.message}\n└─ 错误数据: {json.dumps(self.error_data, ensure_ascii=False, indent=2)}"
@@ -1167,5 +1173,3 @@ def analyze_app_capabilities(client):
             print(f"- {param}: {value}MB")
 
     return params
-
-        
