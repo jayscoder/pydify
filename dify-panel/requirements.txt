@@ -1,0 +1,4 @@
+requests>=2.28.0
+sseclient-py>=1.8.0
+peewee>=3.16.0
+gradio>=4.0.0

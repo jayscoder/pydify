@@ -3,11 +3,8 @@ Pydify - Dify 网站API交互
 
 此模块提供与Dify网站API交互的工具。
 """
-
-import webbrowser
-
 import requests
-
+from typing import List, Union
 
 # Dify应用模式的枚举类，用于创建应用时指定应用类型
 class DifyAppMode:
@@ -375,7 +372,7 @@ class DifySite:
             raise Exception(f"删除API密钥失败: {response.text}")
         return response.json()
 
-    def jump_to_app(self, app_id, app_mode):
+    def app_url(self, app_id, app_mode):
         """
         在浏览器中打开指定应用的控制台页面
 
@@ -384,8 +381,7 @@ class DifySite:
             app_mode (str): 应用模式，应与应用创建时的模式一致
         """
         url = f"{self.base_url}/console/apps/{app_id}/{app_mode}"
-        # 使用默认浏览器打开
-        webbrowser.open(url)
+        return url
 
     def delete_app(self, app_id):
         """
@@ -435,6 +431,10 @@ class DifySite:
         payload = {
             "name": name,
             "description": description,
+            "icon": "🤖",
+            "icon_background": "#FFEAD5",
+            "icon_type": "emoji",
+            "use_icon_as_answer_icon": True,
         }
         response = requests.put(
             update_url,
@@ -443,4 +443,216 @@ class DifySite:
         )
         if response.status_code != 200:
             raise Exception(f"更新应用失败: {response.text}")
+        return response.json()
+    
+    def fetch_tags(self):
+        """
+        获取Dify平台中的所有标签列表
+
+        Returns:
+            list: 所有标签的列表，每个标签包含以下字段:
+                - id (str): 标签ID
+                - name (str): 标签名称
+                - binding_count (str): 标签绑定数量
+        """
+        url = f"{self.base_url}/console/api/tags?type=app"
+        response = requests.get(url, headers={"Authorization": f"Bearer {self.access_token}"})
+        if response.status_code != 200:
+            raise Exception(f"获取标签列表失败: {response.text}")
+        return response.json()
+    
+    def create_tag(self, name):
+        """
+        创建新的Dify标签
+
+        Args:
+            name (str): 标签名称
+
+        Raises:
+            Exception: 创建标签失败时抛出异常，包含错误信息
+
+        Returns:
+            dict: 创建标签成功后的响应数据，包含以下字段:
+                - id (str): 标签ID
+                - name (str): 标签名称
+                - binding_count (str): 标签绑定数量
+        """
+        url = f"{self.base_url}/console/api/tags"
+        payload = {
+            "name": name,
+            "type": 'app',
+        }
+        response = requests.post(url, headers={"Authorization": f"Bearer {self.access_token}"}, json=payload)
+        if response.status_code != 201:
+            raise Exception(f"创建标签失败: {response.text}")
+        return response.json()
+
+    def delete_tag(self, tag_id):
+        """
+        删除指定标签
+
+        Args:
+            tag_id (str): 要删除的标签ID
+
+        Raises:
+            Exception: 删除标签失败时抛出异常，包含错误信息
+
+        Returns:
+            dict: 删除操作的响应数据，如果删除成功，通常返回空对象{}
+        """ 
+        delete_url = f"{self.base_url}/console/api/tags/{tag_id}"
+        response = requests.delete(delete_url, headers={"Authorization": f"Bearer {self.access_token}"})
+        if response.status_code != 204:
+            raise Exception(f"删除标签失败: {response.text}")
+        return response.json()
+
+    def update_tag(self, tag_id, name):
+        """
+        更新指定标签的名称
+
+        Args:
+            tag_id (str): 要更新的标签ID
+            name (str): 新的标签名称
+        Raises:
+            Exception: 更新标签失败时抛出异常，包含错误信息
+
+        Returns:
+            dict: 更新标签成功后的响应数据，包含以下字段:
+                - id (str): 标签ID
+                - name (str): 标签名称
+                - type (str): 标签类型
+                - binding_count (str): 标签绑定数量
+        """
+        update_url = f"{self.base_url}/console/api/tags/{tag_id}"
+        payload = {
+            "name": name,
+        }
+        response = requests.patch(update_url, headers={"Authorization": f"Bearer {self.access_token}"}, json=payload)
+        if response.status_code != 200:
+            raise Exception(f"更新标签失败: {response.text}")
+        return response.json()
+        
+    def bind_tag_to_app(self, app_id, tag_ids: Union[List[str], str]):
+        """
+        将标签绑定到指定应用
+
+        Args:
+            app_id (str): 要绑定标签的应用ID
+            tag_id (str): 要绑定的标签ID
+
+        Raises:
+            Exception: 绑定标签失败时抛出异常，包含错误信息
+
+        Returns:
+            dict: 绑定标签成功后的响应数据，为空
+        """
+        bind_url = f"{self.base_url}/console/api/tag-bindings/create"
+        if isinstance(tag_ids, str):
+            tag_ids = [tag_ids]
+        payload = {
+            "target_id": app_id,
+            "tag_ids": tag_ids,
+            'type': 'app',
+        }
+        response = requests.post(bind_url, headers={"Authorization": f"Bearer {self.access_token}"}, json=payload)
+        if response.status_code != 200:
+            raise Exception(f"绑定标签失败: {response.text}")
+        return response.json()
+    
+    def remove_tag_from_app(self, app_id, tag_ids: Union[List[str], str]):
+        """
+        从指定应用中移除标签
+        
+        Args:
+            app_id (str): 要移除标签的应用ID
+            tag_ids (Union[List[str], str]): 要移除的标签ID或标签ID列表
+
+        Raises:
+            Exception: 移除标签失败时抛出异常，包含错误信息
+
+        Returns:
+            dict: 移除标签成功后的响应数据，为空
+        """
+        remove_url = f"{self.base_url}/console/api/tag-bindings/remove"
+        if isinstance(tag_ids, str):
+            tag_ids = [tag_ids]
+        payload = {
+            "target_id": app_id,
+            "tag_ids": tag_ids,
+            'type': 'app',
+        }
+        response = requests.post(remove_url, headers={"Authorization": f"Bearer {self.access_token}"}, json=payload)
+        if response.status_code != 200:
+            raise Exception(f"移除标签失败: {response.text}")
+        return response.json()
+    
+
+    def fetch_tool_providers(self):
+        """
+        获取Dify平台中的所有工具提供者列表
+
+        Returns:
+            list: 所有工具提供者的列表，每个提供者包含以下字段:
+                - id (str): 工具提供者的唯一标识符
+                - author (str): 工具提供者的作者
+                - name (str): 工具提供者的名称
+                - plugin_id (str, optional): 插件ID，如果不是插件则为None
+                - plugin_unique_identifier (str): 插件的唯一标识符
+                - description (dict): 多语言描述，包含不同语言版本的描述文本
+                - icon (str): 工具提供者图标的URL路径
+                - label (dict): 多语言标签，包含不同语言版本的显示名称
+                - type (str): 工具提供者类型，如"builtin"表示内置工具
+                - team_credentials (dict): 团队凭证信息
+                - is_team_authorization (bool): 是否需要团队授权
+                - allow_delete (bool): 是否允许删除
+                - tools (list): 该提供者提供的工具列表
+                - labels (list): 工具提供者的标签列表，如"productivity"等分类
+        """
+        url = f"{self.base_url}/console/api/workspaces/current/tool-providers"
+        response = requests.get(url, headers={"Authorization": f"Bearer {self.access_token}"})
+        if response.status_code != 200:
+            raise Exception(f"获取工具提供者列表失败: {response.text}")
+        return response.json()
+
+    
+    def publish_workflow_app(self, app_id):
+        """
+        发布指定应用
+
+        Args:
+            app_id (str): 要发布的应用ID
+            http://sandanapp.com:38080/console/api/apps/02475b04-3ce0-4191-bb16-81c7a6ced09a/workflows/publish
+
+        """
+        
+        publish_url = f"{self.base_url}/console/api/apps/{app_id}/workflows/publish"
+        payload = {
+            'marked_comment': '',
+            'marked_name': ''
+        }
+        response = requests.post(
+            publish_url,
+            headers={"Authorization": f"Bearer {self.access_token}"},
+            json=payload
+        )
+       
+        if response.status_code != 200:
+            raise Exception(f"发布应用失败: {response.text}")
+        return response.json()
+        
+    def update_workflow_tool(self, name: str, description: str, label: str, parameters: list, labels: list, privacy_policy: str, workflow_tool_id: str):
+        """
+        更新指定应用的工具
+        http://sandanapp.com:38080/console/api/workspaces/current/tool-provider/workflow/update
+        payload = {"name":"get_acceptance_time","description":"","icon":{"content":"🤖","background":"#FFEAD5"},"label":"获取受理时间","parameters":[{"name":"xfFile_text","description":"","form":"llm"}],"labels":[],"privacy_policy":"","workflow_tool_id":"ffd433a6-0a42-435a-ae05-5c2ef22cd9a4"}
+        Args:
+            app_id (str): 要发布的应用ID
+        """
+        publish_url = f"{self.base_url}/console/api/workspaces/current/tool-provider/workflow/update"
+        payload = {
+           
+        }
+        response = requests.post(publish_url, headers={"Authorization": f"Bearer {self.access_token}"}, json=payload)
+        if response.status_code != 200:
+            raise Exception(f"发布工具失败: {response.text}")
         return response.json()
