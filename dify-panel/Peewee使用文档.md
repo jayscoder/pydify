@@ -601,6 +601,178 @@ print(post.related_ids)
 
 Peewee 本身不包含内置的迁移工具，但有一些第三方库可以与 Peewee 配合使用，例如 `peewee-migrate`。这些工具可以帮助你管理数据库模式的变更。
 
+`peewee-migrate` 是一个第三方库，可以帮助你管理 Peewee 模型的数据库迁移。它类似于 Django 和 Flask 的迁移工具，能够让你轻松地生成和应用数据库迁移。
+
+### 安装 `peewee-migrate`
+
+首先，你需要安装 `peewee-migrate`：
+
+```bash
+pip install peewee-migrate
+```
+
+### 配置和使用 `peewee-migrate`
+
+使用 `peewee-migrate` 的步骤大致如下：
+
+1. **初始化迁移目录**
+2. **创建迁移文件**
+3. **应用迁移**
+4. **回滚迁移（可选）**
+
+#### 1. 初始化迁移目录
+
+首先，你需要创建一个迁移目录来存放迁移文件。可以使用 `peewee-migrate` 的 `migrate` 命令来初始化。
+
+```bash
+peewee_migrate create
+```
+
+这个命令会在你的项目中创建一个名为 `migrations` 的目录，里面会存放所有迁移文件。
+
+#### 2. 创建迁移文件
+
+接下来，你可以通过 `migrate` 命令生成迁移文件，`peewee-migrate` 会自动扫描你的 Peewee 模型，并生成对应的迁移脚本。
+
+假设你有一个名为 `User` 的模型，初始定义如下：
+
+```python
+from peewee import Model, CharField, SqliteDatabase
+
+db = SqliteDatabase('my_database.db')
+
+class BaseModel(Model):
+    class Meta:
+        database = db
+
+class User(BaseModel):
+    username = CharField(unique=True)
+    email = CharField()
+```
+
+现在，你想要在 `User` 表中添加一个字段 `age`。
+
+首先，在模型中修改 `User` 类，添加 `age` 字段：
+
+```python
+class User(BaseModel):
+    username = CharField(unique=True)
+    email = CharField()
+    age = IntegerField(default=18)  # 新增字段
+```
+
+然后，使用 `peewee-migrate` 来生成迁移文件：
+
+```bash
+peewee_migrate migrate
+```
+
+这个命令会检查数据库模型的变化，并生成一个迁移文件，类似于：
+
+```bash
+migrations/
+    0001_initial.py
+    0002_add_age_to_user.py  # 这是自动生成的迁移文件
+```
+
+生成的迁移文件内容通常是类似这样：
+
+```python
+from peewee import *
+from playhouse.migrate import migrator
+
+# 数据库连接
+db = SqliteDatabase('my_database.db')
+
+# 迁移操作
+migrator = migrator.Migrator(db)
+
+def migrate():
+    # 添加 'age' 字段
+    migrator.add_column('user', 'age', IntegerField(default=18))
+```
+
+#### 3. 应用迁移
+
+生成迁移文件后，你可以应用这个迁移脚本来更新数据库。
+
+```bash
+peewee_migrate migrate
+```
+
+`peewee-migrate` 会检查哪些迁移尚未应用，并自动应用新的迁移文件。
+
+#### 4. 查看已应用的迁移
+
+你可以查看当前已应用的迁移：
+
+```bash
+peewee_migrate history
+```
+
+该命令会列出已经应用的所有迁移文件。
+
+#### 5. 回滚迁移（可选）
+
+如果你需要撤销最近的迁移，可以使用 `rollback` 命令：
+
+```bash
+peewee_migrate rollback
+```
+
+该命令会回滚到上一个迁移点。
+
+### 迁移示例
+
+1. **初始化迁移目录：**
+
+   ```bash
+   peewee_migrate create
+   ```
+
+2. **添加字段到模型：**
+   在 `User` 模型中添加 `age` 字段。
+
+3. **生成迁移文件：**
+
+   ```bash
+   peewee_migrate migrate
+   ```
+
+4. **应用迁移：**
+
+   ```bash
+   peewee_migrate migrate
+   ```
+
+5. **查看历史迁移：**
+
+   ```bash
+   peewee_migrate history
+   ```
+
+6. **回滚迁移：**
+
+   ```bash
+   peewee_migrate rollback
+   ```
+
+### 迁移脚本示例
+
+假设你要删除 `User` 表的 `age` 字段。你可以创建一个新的迁移文件，类似于以下代码：
+
+```python
+from peewee import *
+from playhouse.migrate import migrator
+
+db = SqliteDatabase('my_database.db')
+
+migrator = migrator.Migrator(db)
+
+def migrate():
+    migrator.drop_column('user', 'age')
+```
+
 ## 12. 测试 (Testing)
 
 在测试你的应用时，你可能需要使用内存数据库或事务来避免影响实际数据。
@@ -638,12 +810,4 @@ def test_database_operations():
         # 在事务块结束时，所有操作都会回滚，不会影响数据库的实际数据
 
 test_database_operations()
-```
-
-## 13. 总结
-
-Peewee 是一个简洁而强大的 Python ORM，它提供了你需要的大部分数据库操作功能，同时保持了代码的清晰和易读性。通过本文档，你应该能够开始使用 Peewee 构建你的数据库驱动的应用程序。记住查阅 Peewee 的官方文档以获取更深入的信息和高级用法。
-
-```
-
 ```

@@ -19,6 +19,13 @@ class DifyAppMode:
     WORKFLOW = "workflow"  # 工作流应用
 
 
+class DifyToolParameterFormType:
+    """
+    Dify工具参数表单类型枚举类，定义了Dify支持的所有工具参数表单类型
+    """
+    FORM = "form"  # 表单类型
+    LLM = "llm"  # LLM类型
+
 class DifySite:
     """
     Dify网站API交互类，提供与Dify平台管理API的交互功能
@@ -617,7 +624,7 @@ class DifySite:
     
     def publish_workflow_app(self, app_id):
         """
-        发布指定应用
+        发布指定工作流应用
 
         Args:
             app_id (str): 要发布的应用ID
@@ -639,20 +646,83 @@ class DifySite:
         if response.status_code != 200:
             raise Exception(f"发布应用失败: {response.text}")
         return response.json()
-        
-    def update_workflow_tool(self, name: str, description: str, label: str, parameters: list, labels: list, privacy_policy: str, workflow_tool_id: str):
+    
+    def update_workflow_tool(self, workflow_app_id: str, name: str=None, description: str=None, label: str=None, parameters: list=None, labels: list=None, privacy_policy: str=None):
         """
-        更新指定应用的工具
+        更新指定工作流应用的工具
         http://sandanapp.com:38080/console/api/workspaces/current/tool-provider/workflow/update
         payload = {"name":"get_acceptance_time","description":"","icon":{"content":"🤖","background":"#FFEAD5"},"label":"获取受理时间","parameters":[{"name":"xfFile_text","description":"","form":"llm"}],"labels":[],"privacy_policy":"","workflow_tool_id":"ffd433a6-0a42-435a-ae05-5c2ef22cd9a4"}
         Args:
-            app_id (str): 要发布的应用ID
+            workflow_tool_id (str): 要更新的工具ID
+            name (str): 工具名称
+            description (str): 工具描述
+            label (str): 工具显示名称
+            parameters (list): 工具参数列表
+            labels (list): 工具标签列表
+            privacy_policy (str): 隐私政策
+            
+        如果某个参数是None，则不更新该参数
         """
+        old_tool = self.fetch_workflow_tool(workflow_app_id)
+        name = name if name is not None else old_tool['name']
+        description = description if description is not None else old_tool['description']
+        label = label if label is not None else old_tool['label']
+        parameters = parameters if parameters is not None else old_tool['parameters']
+        labels = labels if labels is not None else old_tool['labels']
+        privacy_policy = privacy_policy if privacy_policy is not None else old_tool['privacy_policy']
+        workflow_tool_id = old_tool['workflow_tool_id']
+        
         publish_url = f"{self.base_url}/console/api/workspaces/current/tool-provider/workflow/update"
         payload = {
-           
+           "name": name,
+           "description": description,
+           "icon": {"content":"🤖","background":"#FFEAD5"},
+           "label": label,
+           "parameters": parameters,
+           "labels": labels,
+           "privacy_policy": privacy_policy,
+           "workflow_tool_id": workflow_tool_id
         }
         response = requests.post(publish_url, headers={"Authorization": f"Bearer {self.access_token}"}, json=payload)
         if response.status_code != 200:
             raise Exception(f"发布工具失败: {response.text}")
+        return response.json()
+    
+    def fetch_workflow_tool(self, workflow_app_id: str):
+        """
+        获取指定工作流应用的工具详情信息
+
+        Args:
+            workflow_app_id (str): 要获取工具信息的工作流应用ID
+
+        Raises:
+            Exception: 获取工具信息失败时抛出异常，包含错误信息
+
+        Returns:
+            dict: 工作流工具详细信息，包含以下字段:
+                - name (str): 工具名称
+                - label (str): 工具显示名称
+                - workflow_tool_id (str): 工具ID
+                - workflow_app_id (str): 关联的工作流应用ID
+                - icon (dict): 工具图标信息，包含content(图标内容)和background(背景色)
+                - description (str): 工具描述
+                - parameters (list): 工具参数列表，每个参数包含:
+                    - name (str): 参数名
+                    - description (str): 参数描述
+                    - form (str): 参数表单类型(form/llm)
+                - tool (dict): 工具详细配置，包含:
+                    - author (str): 作者
+                    - name (str): 工具名称
+                    - label (dict): 多语言标签
+                    - description (dict): 多语言描述
+                    - parameters (list): 详细参数配置
+                    - labels (list): 标签列表
+                    - output_schema (dict|null): 输出模式
+                - synced (bool): 是否已同步
+                - privacy_policy (str): 隐私政策
+        """
+        url = f"{self.base_url}/console/api/workspaces/current/tool-provider/workflow/get?workflow_app_id={workflow_app_id}"
+        response = requests.get(url, headers={"Authorization": f"Bearer {self.access_token}"})
+        if response.status_code != 200:
+            raise Exception(f"获取工具失败: {response.text}")
         return response.json()
