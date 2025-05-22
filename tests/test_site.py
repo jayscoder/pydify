@@ -116,28 +116,6 @@ class TestDifySite(unittest.TestCase):
         self.assertEqual(result["id"], "new_app_id")
         self.assertEqual(result["name"], "New Test App")
 
-    @patch("requests.post")
-    @patch("webbrowser.open")
-    def test_jump_to_app(self, mock_open, mock_post):
-        # 模拟登录响应
-        login_response = MagicMock()
-        login_response.status_code = 200
-        login_response.json.return_value = {
-            "data": {
-                "access_token": "test_access_token",
-                "refresh_token": "test_refresh_token",
-            }
-        }
-        mock_post.return_value = login_response
-
-        # 初始化DifySite并跳转到应用
-        site = DifySite("http://test-dify.com", "test@example.com", "password")
-        site.jump_to_app("app_id", DifyAppMode.CHAT)
-
-        # 验证调用了正确的URL
-        expected_url = "http://test-dify.com/console/apps/app_id/chat"
-        mock_open.assert_called_once_with(expected_url)
-
 
 if __name__ == "__main__":
     unittest.main()

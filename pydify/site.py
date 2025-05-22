@@ -3,8 +3,11 @@ Pydify - Dify 网站API交互
 
 此模块提供与Dify网站API交互的工具。
 """
-import requests
+
 from typing import List, Union
+
+import requests
+
 
 # Dify应用模式的枚举类，用于创建应用时指定应用类型
 class DifyAppMode:
@@ -23,8 +26,10 @@ class DifyToolParameterFormType:
     """
     Dify工具参数表单类型枚举类，定义了Dify支持的所有工具参数表单类型
     """
+
     FORM = "form"  # 表单类型
     LLM = "llm"  # LLM类型
+
 
 class DifySite:
     """
@@ -46,7 +51,7 @@ class DifySite:
         Raises:
             Exception: 登录失败时抛出异常，包含错误信息
         """
-        if base_url.endswith('/'):
+        if base_url.endswith("/"):
             base_url = base_url[:-1]
         self.base_url = base_url
         self.email = email
@@ -411,7 +416,6 @@ class DifySite:
             raise Exception(f"删除应用失败: {response.text}")
         return response.json()
 
-    
     def update_app(self, app_id, name, description):
         """
         更新指定应用的名称和描述
@@ -451,7 +455,7 @@ class DifySite:
         if response.status_code != 200:
             raise Exception(f"更新应用失败: {response.text}")
         return response.json()
-    
+
     def fetch_tags(self):
         """
         获取Dify平台中的所有标签列表
@@ -463,11 +467,13 @@ class DifySite:
                 - binding_count (str): 标签绑定数量
         """
         url = f"{self.base_url}/console/api/tags?type=app"
-        response = requests.get(url, headers={"Authorization": f"Bearer {self.access_token}"})
+        response = requests.get(
+            url, headers={"Authorization": f"Bearer {self.access_token}"}
+        )
         if response.status_code != 200:
             raise Exception(f"获取标签列表失败: {response.text}")
         return response.json()
-    
+
     def create_tag(self, name):
         """
         创建新的Dify标签
@@ -487,9 +493,11 @@ class DifySite:
         url = f"{self.base_url}/console/api/tags"
         payload = {
             "name": name,
-            "type": 'app',
+            "type": "app",
         }
-        response = requests.post(url, headers={"Authorization": f"Bearer {self.access_token}"}, json=payload)
+        response = requests.post(
+            url, headers={"Authorization": f"Bearer {self.access_token}"}, json=payload
+        )
         if response.status_code != 201:
             raise Exception(f"创建标签失败: {response.text}")
         return response.json()
@@ -506,9 +514,11 @@ class DifySite:
 
         Returns:
             dict: 删除操作的响应数据，如果删除成功，通常返回空对象{}
-        """ 
+        """
         delete_url = f"{self.base_url}/console/api/tags/{tag_id}"
-        response = requests.delete(delete_url, headers={"Authorization": f"Bearer {self.access_token}"})
+        response = requests.delete(
+            delete_url, headers={"Authorization": f"Bearer {self.access_token}"}
+        )
         if response.status_code != 204:
             raise Exception(f"删除标签失败: {response.text}")
         return response.json()
@@ -534,11 +544,15 @@ class DifySite:
         payload = {
             "name": name,
         }
-        response = requests.patch(update_url, headers={"Authorization": f"Bearer {self.access_token}"}, json=payload)
+        response = requests.patch(
+            update_url,
+            headers={"Authorization": f"Bearer {self.access_token}"},
+            json=payload,
+        )
         if response.status_code != 200:
             raise Exception(f"更新标签失败: {response.text}")
         return response.json()
-        
+
     def bind_tag_to_app(self, app_id, tag_ids: Union[List[str], str]):
         """
         将标签绑定到指定应用
@@ -559,17 +573,21 @@ class DifySite:
         payload = {
             "target_id": app_id,
             "tag_ids": tag_ids,
-            'type': 'app',
+            "type": "app",
         }
-        response = requests.post(bind_url, headers={"Authorization": f"Bearer {self.access_token}"}, json=payload)
+        response = requests.post(
+            bind_url,
+            headers={"Authorization": f"Bearer {self.access_token}"},
+            json=payload,
+        )
         if response.status_code != 200:
             raise Exception(f"绑定标签失败: {response.text}")
         return response.json()
-    
+
     def remove_tag_from_app(self, app_id, tag_ids: Union[List[str], str]):
         """
         从指定应用中移除标签
-        
+
         Args:
             app_id (str): 要移除标签的应用ID
             tag_ids (Union[List[str], str]): 要移除的标签ID或标签ID列表
@@ -586,13 +604,16 @@ class DifySite:
         payload = {
             "target_id": app_id,
             "tag_ids": tag_ids,
-            'type': 'app',
+            "type": "app",
         }
-        response = requests.post(remove_url, headers={"Authorization": f"Bearer {self.access_token}"}, json=payload)
+        response = requests.post(
+            remove_url,
+            headers={"Authorization": f"Bearer {self.access_token}"},
+            json=payload,
+        )
         if response.status_code != 200:
             raise Exception(f"移除标签失败: {response.text}")
         return response.json()
-    
 
     def fetch_tool_providers(self):
         """
@@ -616,12 +637,13 @@ class DifySite:
                 - labels (list): 工具提供者的标签列表，如"productivity"等分类
         """
         url = f"{self.base_url}/console/api/workspaces/current/tool-providers"
-        response = requests.get(url, headers={"Authorization": f"Bearer {self.access_token}"})
+        response = requests.get(
+            url, headers={"Authorization": f"Bearer {self.access_token}"}
+        )
         if response.status_code != 200:
             raise Exception(f"获取工具提供者列表失败: {response.text}")
         return response.json()
 
-    
     def publish_workflow_app(self, app_id):
         """
         发布指定工作流应用
@@ -631,23 +653,29 @@ class DifySite:
             http://sandanapp.com:38080/console/api/apps/02475b04-3ce0-4191-bb16-81c7a6ced09a/workflows/publish
 
         """
-        
+
         publish_url = f"{self.base_url}/console/api/apps/{app_id}/workflows/publish"
-        payload = {
-            'marked_comment': '',
-            'marked_name': ''
-        }
+        payload = {"marked_comment": "", "marked_name": ""}
         response = requests.post(
             publish_url,
             headers={"Authorization": f"Bearer {self.access_token}"},
-            json=payload
+            json=payload,
         )
-       
+
         if response.status_code != 200:
             raise Exception(f"发布应用失败: {response.text}")
         return response.json()
-    
-    def update_workflow_tool(self, workflow_app_id: str, name: str=None, description: str=None, label: str=None, parameters: list=None, labels: list=None, privacy_policy: str=None):
+
+    def update_workflow_tool(
+        self,
+        workflow_app_id: str,
+        name: str = None,
+        description: str = None,
+        label: str = None,
+        parameters: list = None,
+        labels: list = None,
+        privacy_policy: str = None,
+    ):
         """
         更新指定工作流应用的工具
         http://sandanapp.com:38080/console/api/workspaces/current/tool-provider/workflow/update
@@ -660,34 +688,42 @@ class DifySite:
             parameters (list): 工具参数列表
             labels (list): 工具标签列表
             privacy_policy (str): 隐私政策
-            
+
         如果某个参数是None，则不更新该参数
         """
         old_tool = self.fetch_workflow_tool(workflow_app_id)
-        name = name if name is not None else old_tool['name']
-        description = description if description is not None else old_tool['description']
-        label = label if label is not None else old_tool['label']
-        parameters = parameters if parameters is not None else old_tool['parameters']
-        labels = labels if labels is not None else old_tool['labels']
-        privacy_policy = privacy_policy if privacy_policy is not None else old_tool['privacy_policy']
-        workflow_tool_id = old_tool['workflow_tool_id']
-        
+        name = name if name is not None else old_tool["name"]
+        description = (
+            description if description is not None else old_tool["description"]
+        )
+        label = label if label is not None else old_tool["label"]
+        parameters = parameters if parameters is not None else old_tool["parameters"]
+        labels = labels if labels is not None else old_tool["labels"]
+        privacy_policy = (
+            privacy_policy if privacy_policy is not None else old_tool["privacy_policy"]
+        )
+        workflow_tool_id = old_tool["workflow_tool_id"]
+
         publish_url = f"{self.base_url}/console/api/workspaces/current/tool-provider/workflow/update"
         payload = {
-           "name": name,
-           "description": description,
-           "icon": {"content":"🤖","background":"#FFEAD5"},
-           "label": label,
-           "parameters": parameters,
-           "labels": labels,
-           "privacy_policy": privacy_policy,
-           "workflow_tool_id": workflow_tool_id
+            "name": name,
+            "description": description,
+            "icon": {"content": "🤖", "background": "#FFEAD5"},
+            "label": label,
+            "parameters": parameters,
+            "labels": labels,
+            "privacy_policy": privacy_policy,
+            "workflow_tool_id": workflow_tool_id,
         }
-        response = requests.post(publish_url, headers={"Authorization": f"Bearer {self.access_token}"}, json=payload)
+        response = requests.post(
+            publish_url,
+            headers={"Authorization": f"Bearer {self.access_token}"},
+            json=payload,
+        )
         if response.status_code != 200:
             raise Exception(f"发布工具失败: {response.text}")
         return response.json()
-    
+
     def fetch_workflow_tool(self, workflow_app_id: str):
         """
         获取指定工作流应用的工具详情信息
@@ -722,7 +758,9 @@ class DifySite:
                 - privacy_policy (str): 隐私政策
         """
         url = f"{self.base_url}/console/api/workspaces/current/tool-provider/workflow/get?workflow_app_id={workflow_app_id}"
-        response = requests.get(url, headers={"Authorization": f"Bearer {self.access_token}"})
+        response = requests.get(
+            url, headers={"Authorization": f"Bearer {self.access_token}"}
+        )
         if response.status_code != 200:
             raise Exception(f"获取工具失败: {response.text}")
         return response.json()
