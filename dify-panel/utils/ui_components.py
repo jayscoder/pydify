@@ -7,46 +7,57 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import pandas as pd
 import streamlit as st
 from utils.dify_client import DifyClient
-
+from config import Pages
+import time
+import json
+import uuid
 
 def connection_form():
     """
-    显示Dify平台连接表单
-
-    从环境变量中读取默认值，并显示在表单中
-    返回用户输入的连接信息和是否点击了连接按钮
-
-    Returns:
-        tuple: (base_url, email, password, submit_clicked)
+    显示连接表单，用于配置和连接到Dify平台
     """
-    # 获取环境变量中的默认值
-    default_base_url, default_email, default_password = (
-        DifyClient.get_default_connection_info()
-    )
+    # 获取默认连接信息
+    default_base_url, default_email, default_password = DifyClient.get_default_connection_info()
 
-    # 优先使用session_state中的值，再使用环境变量中的默认值
-    base_url_value = st.session_state.get("dify_base_url", default_base_url)
-    email_value = st.session_state.get("dify_email", default_email)
-    password_value = st.session_state.get("dify_password", default_password)
-
-    with st.form("连接Dify平台"):
-        st.subheader("连接到Dify平台")
-        base_url = st.text_input(
-            "服务器地址",
-            value=base_url_value,
-            placeholder="例如: http://example.com:11080",
-        )
-        email = st.text_input(
-            "邮箱账号", value=email_value, placeholder="例如: admin@example.com"
-        )
-        password = st.text_input("密码", value=password_value, type="password")
-
-        if default_base_url or default_email:
-            st.info("已从环境变量中加载连接信息作为默认值")
-
-        submit = st.form_submit_button("连接")
-
-    return base_url, email, password, submit
+    # 创建连接表单
+    with st.form("dify_connection_form"):
+        st.subheader("Dify平台连接")
+        
+        base_url = st.text_input("平台URL", value=default_base_url, placeholder="例如: https://cloud.dify.ai 或 http://localhost:5001")
+        email = st.text_input("邮箱", value=default_email, placeholder="登录邮箱")
+        password = st.text_input("密码", value=default_password, type="password", placeholder="登录密码")
+        
+        # 测试连接和保存按钮
+        col1, col2 = st.columns(2)
+        with col1:
+            test_connection = st.form_submit_button("测试连接", use_container_width=True)
+        with col2:
+            save_connection = st.form_submit_button("连接", use_container_width=True, type="primary")
+        
+        # 测试连接
+        if test_connection:
+            if not base_url or not email or not password:
+                st.error("请填写所有必填字段")
+            else:
+                with st.spinner("正在测试连接..."):
+                    connection_successful = DifyClient.test_connect(base_url, email, password)
+                    if connection_successful:
+                        st.success("连接测试成功!")
+                    else:
+                        st.error("连接测试失败，请检查连接信息")
+        
+        # 保存连接
+        if save_connection:
+            if not base_url or not email or not password:
+                st.error("请填写所有必填字段")
+            else:
+                with st.spinner("正在连接..."):
+                    connection_successful = DifyClient.connect(base_url, email, password)
+                    if connection_successful:
+                        st.success("连接成功!")
+                        st.rerun()  # 重新加载页面以更新连接状态
+                    else:
+                        st.error("连接失败，请检查连接信息")
 
 
 def app_selector(apps: List[Dict[str, Any]], key: str = "app_selector"):
@@ -151,22 +162,23 @@ def app_card(
 
 def format_timestamp(timestamp):
     """
-    格式化时间戳为可读字符串
-
-    Args:
-        timestamp (int): Unix时间戳(毫秒)
-
-    Returns:
-        str: 格式化后的日期时间
+    将时间戳格式化为可读的时间格式
+    
+    参数:
+        timestamp: 时间戳（秒）
+    
+    返回:
+        格式化后的时间字符串
     """
     if not timestamp:
-        return "未知"
-
-    import datetime
-
-    # 将时间戳转换为日期时间对象
-    dt = datetime.datetime.fromtimestamp(timestamp / 1000.0)
-    return dt.strftime("%Y-%m-%d %H:%M:%S")
+        return "未知时间"
+    
+    try:
+        # 将时间戳转换为可读时间
+        time_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp))
+        return time_str
+    except Exception:
+        return str(timestamp)
 
 
 def confirmation_dialog(title, message, on_confirm, on_cancel=None):
@@ -253,20 +265,18 @@ def tag_card(tag, on_edit=None, on_delete=None):
         st.divider()
 
 
-def page_header(title, description=None):
+def page_header(title, description=""):
     """
     显示页面标题和描述
-
-    Args:
-        title (str): 页面标题
-        description (str, optional): 页面描述
+    
+    参数:
+        title: 页面标题
+        description: 页面描述
     """
     st.title(title)
     if description:
-        st.write(description)
-    st.divider()
-
-
+        st.markdown(description)
+    
 def error_placeholder(error_message=None):
     """
     显示错误占位符
@@ -308,54 +318,122 @@ def data_display(
     columns: List[Dict[str, str]],
     key: str,
     height: int = 500,
+    on_select: Callable = None,
+    multi_select: bool = False,
 ):
     """
     显示数据表格并支持行选择
 
     Args:
         data (List[Dict]): 数据列表
-        columns (List[Dict]): 列配置，格式为 [{"field": "字段名", "title": "显示名"}]
+        columns (List[Dict]): 列配置，格式为 [{"field": "字段名" | 函数, "title": "显示名"}]
+            field可以是嵌套路径，如a.b表示获取item['a']['b']，a.b.c表示获取item['a']['b']['c']
         key (str): 表格唯一标识
         height (int): 表格高度
-
+        on_select (Callable): 选中行时的回调函数，参数为选中的行数据
+        multi_select (bool): 是否启用多选
     Returns:
         pandas.DataFrame: 选中的行数据，如果未选择则返回空DataFrame
     """
     if not data:
         st.info("没有可显示的数据")
         return pd.DataFrame()
-
+    
+    def get_nested_value(item, field_path):
+        """递归获取嵌套字段值"""
+        try:
+            keys = field_path.split('.')
+            value = item
+            for key in keys:
+                value = value[key]
+            return value
+        except (KeyError, TypeError):
+            return None
     # 转换为DataFrame
-    df_data = []
-    for item in data:
-        row = {}
-        for col in columns:
-            field = col["field"]
-            if field in item:
-                if isinstance(item[field], (dict, list)):
-                    row[col["title"]] = str(item[field])
+    if columns is not None:
+        df_data = []
+        for item in data:
+            row = {}
+            for col in columns:
+                field = col["field"]
+                if callable(field):
+                    row[col["title"]] = field(item)
+                elif '.' in field:  # 处理嵌套字段
+                    value = get_nested_value(item, field)
+                    if isinstance(value, (dict, list)):
+                        row[col["title"]] = str(value)
+                    else:
+                        row[col["title"]] = value if value is not None else "-"
+                elif field in item:
+                    if isinstance(item[field], (dict, list)):
+                        row[col["title"]] = str(item[field])
+                    else:
+                        row[col["title"]] = item[field]
                 else:
-                    row[col["title"]] = item[field]
+                    row[col["title"]] = "-"
+            df_data.append(row)
+
+        df = pd.DataFrame(df_data)
+    else:
+        df = pd.DataFrame(data)
+    
+    # 搜索
+    search = st.text_input("搜索", key=f"search_{key}")
+    
+    if search and not df.empty:
+        # 使用更安全的方式过滤DataFrame
+        try:
+            mask = pd.Series(False, index=df.index)
+            search_lower = search.lower()
+            
+            # 对每一列应用搜索
+            for col in df.columns:
+                # 将列转换为字符串并转为小写进行比较
+                col_mask = df[col].astype(str).str.lower().str.contains(search_lower, na=False)
+                mask = mask | col_mask
+            
+            # 应用过滤
+            filtered_df = df[mask]
+            
+            # 如果过滤后有结果，则使用过滤后的DataFrame
+            if not filtered_df.empty:
+                df = filtered_df
             else:
-                row[col["title"]] = "-"
-        # 添加原始ID方便后续操作
-        row["_id"] = item.get("id", "")
-        df_data.append(row)
-
-    df = pd.DataFrame(df_data)
-
+                st.info("未找到匹配的记录")
+        except Exception as e:
+            st.error(f"搜索时发生错误: {str(e)}")
+        
     # 显示表格，使用适合Streamlit新版本的数据表格组件
     event = st.dataframe(
-        df, height=height, use_container_width=True, selection_mode="single", key=key
+        df, height=height, on_select='rerun', use_container_width=True, selection_mode="single-row" if not multi_select else "multi-row", key=key
     )
 
+    selected_df = df.iloc[event.selection.rows]
+    
     # 处理选择行事件
-    if event.selected_rows:
-        # 返回选中的行
-        selected_index = event.selected_rows[0]
-        return df.iloc[[selected_index]]
+    if not selected_df.empty and on_select:
+        on_select(selected_df)
+        
+    # 返回选中的行
+    return selected_df
 
-    return pd.DataFrame()
+
+@st.dialog("详情查看", width="large")
+def show_detail_dialog(title, content_func=None, key=None):
+    """
+    使用st.dialog显示详情弹窗
+
+    Args:
+        title (str): 对话框标题
+        content_func (Callable): 生成对话框内容的函数
+        key (str): 组件唯一标识
+    """
+    st.subheader(title)
+    
+    # 显示内容
+    if content_func:
+        content_func()
+   
 
 
 def detail_dialog(title, content_func=None, on_close=None):
@@ -379,34 +457,200 @@ def detail_dialog(title, content_func=None, on_close=None):
             on_close()
 
 
-def action_bar(actions: List[Dict[str, Any]]):
+def action_bar(actions):
     """
-    显示操作栏
-
-    Args:
-        actions (List[Dict]): 操作按钮配置
-            格式: [{"label": "按钮文本", "key": "唯一标识", "color": "primary", "on_click": callback_func}]
+    创建操作按钮栏
+    
+    参数:
+        actions: 操作按钮列表，每个按钮是一个字典，包含label, key, on_click等
+        alignment: 按钮对齐方式，默认右对齐
     """
-    cols = st.columns(len(actions))
-
+    # 创建按钮容器
+    cols = st.columns([1] * len(actions))
+    
     for i, action in enumerate(actions):
-        with cols[i]:
-            button_type = action.get("color", "primary")
-            if button_type == "primary":
-                if st.button(action["label"], key=action["key"]):
-                    if "on_click" in action and callable(action["on_click"]):
-                        action["on_click"]()
-            elif button_type == "secondary":
-                if st.button(action["label"], key=action["key"], type="secondary"):
-                    if "on_click" in action and callable(action["on_click"]):
-                        action["on_click"]()
-            elif button_type == "danger":
-                danger_button = st.empty()
-                if danger_button.button(
-                    action["label"],
-                    key=action["key"],
-                    type="primary",
-                    use_container_width=True,
-                ):
-                    if "on_click" in action and callable(action["on_click"]):
-                        action["on_click"]()
+        label = action.get("label", "")
+        key = action.get("key", f"btn_{uuid.uuid4()}")
+        on_click = action.get("on_click", None)
+        color = action.get("color", "primary")
+        rerun = action.get("rerun", False)
+        if color == "danger":
+            if cols[i].button(label, key=key, type="primary", use_container_width=True):
+                if on_click:
+                    on_click()
+                    if rerun:
+                        st.rerun()
+        else:
+            if cols[i].button(label, key=key, use_container_width=True):
+                if on_click:
+                    on_click()
+                    if rerun:
+                        st.rerun()
+
+
+def site_sidebar():
+    # 主要的侧边栏
+    from models import Site
+    from utils.dify_client import DifyClient, try_auto_connect
+    
+    if not DifyClient.is_connected():
+        try_auto_connect()
+    
+    with st.sidebar:
+        # 显示连接状态
+        if DifyClient.is_connected():
+            # 从数据库获取所有站点
+            active_site = DifyClient.get_active_site()
+            try:
+                sites = list(Site.select().dicts())
+                site_id_mapping = {site['id']: site for site in sites}
+                
+                if sites:
+                    # 构建站点选择列表
+                    site_ids = [site['id'] for site in sites]
+                    def site_option_formart(site_id):
+                        site_option = site_id_mapping[site_id]
+                        return f"{site_option['name']} ({site_option['base_url']})"
+
+                    active_site_index = 0
+                    if active_site:
+                        active_site_index = site_ids.index(active_site['id'])
+                    
+                    # 显示选择器，默认值为"- 选择要切换的站点 -"
+                    selected_site_id = st.selectbox(
+                        "选择站点",
+                        options=site_ids,
+                        format_func=site_option_formart,
+                        key="site_selector",
+                        index=active_site_index
+                    )
+                    
+                    # 如果用户选择了一个站点，且与当前站点不同，则连接到新站点
+                    if selected_site_id != active_site.get("id"):
+                        # 查找选中的站点信息
+                        selected_site = site_id_mapping[selected_site_id]
+                        
+                        # 如果选中的站点与当前站点不同，则连接到新站点
+                        if not active_site or selected_site_id != active_site.get("id"):
+                            col1, col2 = st.columns(2)
+                            
+                            with col1:
+                                if st.button("连接", key="connect_selected_site"):
+                                    with st.spinner(f"正在连接到站点 {selected_site['name']}..."):
+                                        if DifyClient.connect(
+                                            selected_site["base_url"],
+                                            selected_site["email"],
+                                            selected_site["password"],
+                                            selected_site["id"],
+                                            selected_site["name"]
+                                        ):
+                                            st.success(f"已连接到站点: {selected_site['name']}")
+                                            st.rerun()
+                            
+                            with col2:
+                                if not selected_site.get("is_default") and st.button("设为默认", key="set_default_site"):
+                                    try:
+                                        # 将所有站点的is_default设为False
+                                        Site.update(is_default=False).execute()
+                                        
+                                        # 将选中的站点设为默认
+                                        site_obj = Site.get_by_id(selected_site_id)
+                                        site_obj.is_default = True
+                                        site_obj.save()
+                                        
+                                        st.success(f"已将 {selected_site['name']} 设为默认站点")
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"设置默认站点失败: {str(e)}")
+                else:
+                    st.info("没有可用的站点")
+                    if st.button("添加站点"):
+                        st.switch_page(Pages.SITE_MANAGEMENT)
+            except Exception as e:
+                st.error(f"获取站点列表失败: {str(e)}")
+                if st.button("管理站点", key="manage_sites_error"):
+                    st.switch_page(Pages.SITE_MANAGEMENT)
+
+            active_site = DifyClient.get_active_site()
+
+            if active_site:
+                # 如果有活跃站点信息，显示当前站点
+                st.write(f"当前站点: {active_site['name']}")
+            
+            st.write(f"服务器: {st.session_state.dify_base_url}")
+            st.write(f"账号: {st.session_state.dify_email}")
+            
+        else:
+            st.warning("未连接到Dify平台")
+            st.info("请在右侧连接表单中输入Dify平台的连接信息")
+            
+            # 站点管理按钮
+            if st.button("站点管理"):
+                st.switch_page(Pages.SITE_MANAGEMENT)
+
+
+def json_viewer(data):
+    """
+    显示格式化的JSON数据
+    
+    参数:
+        data: 要显示的JSON数据
+    """
+    # 转换为格式化的JSON字符串
+    if data:
+        try:
+            if isinstance(data, str):
+                data = json.loads(data)
+            
+            formatted_json = json.dumps(data, indent=2, ensure_ascii=False)
+            st.code(formatted_json, language="json")
+        except Exception as e:
+            st.error(f"JSON格式化失败: {str(e)}")
+            st.write(data)
+    else:
+        st.info("无数据")
+
+
+def confirmation_dialog(title, message, key=None):
+    """
+    显示确认对话框
+    
+    参数:
+        title: 对话框标题
+        message: 对话框消息
+        key: 组件key
+    
+    返回:
+        bool: 是否确认
+    """
+    # 使用expander作为简单的确认对话框
+    with st.expander(title, expanded=True):
+        st.write(message)
+        col1, col2 = st.columns(2)
+        confirmed = col1.button("确认", key=f"{key}_confirm" if key else None, type="primary")
+        cancelled = col2.button("取消", key=f"{key}_cancel" if key else None)
+        
+        if cancelled:
+            return False
+        
+        return confirmed
+
+
+def set_sesstion_state(key, value, rerun=False):
+    """
+    设置session状态
+    """
+    st.session_state[key] = value
+    if rerun:
+        st.rerun()
+        
+def toggle_session_state(key, rerun=False):
+    """
+    切换session状态
+    """
+    if key not in st.session_state:
+        st.session_state[key] = True
+    else:
+        st.session_state[key] = not st.session_state[key]
+    if rerun:
+        st.rerun()

@@ -1,0 +1,180 @@
+{
+  "workflow": {
+    "graph": {
+      "nodes": [
+        {
+          "id": "start_node",
+          "data": {
+            "type": "start",
+            "title": "开始"
+          },
+          "position": {
+            "x": 100,
+            "y": 300
+          }
+        },
+        {
+          "id": "llm_node_1",
+          "data": {
+            "type": "llm",
+            "title": "问题提炼专家"
+          },
+          "position": {
+            "x": 300,
+            "y": 200
+          }
+        },
+        {
+          "id": "code_node",
+          "data": {
+            "type": "code",
+            "title": "代码处理"
+          },
+          "position": {
+            "x": 300,
+            "y": 300
+          }
+        },
+        {
+          "id": "if_else_node",
+          "data": {
+            "type": "if-else",
+            "title": "条件判断"
+          },
+          "position": {
+            "x": 300,
+            "y": 400
+          }
+        },
+        {
+          "id": "llm_node_2",
+          "data": {
+            "type": "llm",
+            "title": "匹配关键词"
+          },
+          "position": {
+            "x": 500,
+            "y": 350
+          }
+        },
+        {
+          "id": "template_node",
+          "data": {
+            "type": "template-transform",
+            "title": "内容拼接"
+          },
+          "position": {
+            "x": 700,
+            "y": 300
+          }
+        },
+        {
+          "id": "end_node",
+          "data": {
+            "type": "end",
+            "title": "结束"
+          },
+          "position": {
+            "x": 900,
+            "y": 300
+          }
+        },
+        {
+          "id": "tool_node",
+          "data": {
+            "type": "tool",
+            "title": "外部工具"
+          },
+          "position": {
+            "x": 500,
+            "y": 450
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "start_node",
+          "target": "llm_node_1",
+          "data": {
+            "sourceType": "start",
+            "targetType": "llm"
+          }
+        },
+        {
+          "source": "start_node",
+          "target": "code_node",
+          "data": {
+            "sourceType": "start",
+            "targetType": "code"
+          }
+        },
+        {
+          "source": "start_node",
+          "target": "if_else_node",
+          "data": {
+            "sourceType": "start",
+            "targetType": "if-else"
+          }
+        },
+        {
+          "source": "llm_node_1",
+          "target": "template_node",
+          "data": {
+            "sourceType": "llm",
+            "targetType": "template-transform"
+          }
+        },
+        {
+          "source": "code_node",
+          "target": "template_node",
+          "data": {
+            "sourceType": "code",
+            "targetType": "template-transform"
+          }
+        },
+        {
+          "source": "if_else_node",
+          "target": "llm_node_2",
+          "data": {
+            "sourceType": "if-else",
+            "targetType": "llm",
+            "condition": "true"
+          }
+        },
+        {
+          "source": "if_else_node",
+          "target": "tool_node",
+          "data": {
+            "sourceType": "if-else",
+            "targetType": "tool",
+            "condition": "false"
+          }
+        },
+        {
+          "source": "llm_node_2",
+          "target": "template_node",
+          "data": {
+            "sourceType": "llm",
+            "targetType": "template-transform"
+          }
+        },
+        {
+          "source": "tool_node",
+          "target": "template_node",
+          "data": {
+            "sourceType": "tool",
+            "targetType": "template-transform"
+          }
+        },
+        {
+          "source": "template_node",
+          "target": "end_node",
+          "data": {
+            "sourceType": "template-transform",
+            "targetType": "end"
+          }
+        }
+      ]
+    }
+  }
+}

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
-
+from config import Pages
 # 添加项目根目录到Python路径
 root_dir = Path(__file__).parent.parent
 sys.path.append(str(root_dir))
@@ -448,7 +448,7 @@ def main():
 
         # 返回主页按钮
         if st.button("返回主页"):
-            st.switch_page("app.py")
+            st.switch_page(Pages.HOME)
         return
 
     # 根据当前视图模式显示不同的内容

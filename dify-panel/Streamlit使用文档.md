@@ -1820,6 +1820,102 @@ st.theme({
 })
 ```
 
----
+## Streamlit Agraph
 
-以上是 Streamlit 的完整使用文档，包含了所有主要功能和用法示例，包括文本元素、数据展示、图表、输入组件、布局与容器、媒体元素、状态控制、页面配置、实用功能、连接功能、性能优化、缓存、会话状态、用户上下文、主题和配置选项等。根据你的应用需求，可以选择合适的组件和功能来构建交互式数据应用程序。
+Streamlit Agraph 是一个用于在 Streamlit 应用中创建和显示图表的组件。它提供了一种简单的方式来创建和显示图表，并支持自定义样式和内容。
+
+### 安装
+
+```bash
+pip install streamlit-agraph
+```
+
+### 使用
+
+#### Basic Usage
+
+```python
+import streamlit
+from streamlit_agraph import agraph, Node, Edge, Config
+
+nodes = []
+edges = []
+nodes.append( Node(id="Spiderman",
+                   label="Peter Parker",
+                   size=25,
+                   shape="circularImage",
+                   image="http://marvel-force-chart.surge.sh/marvel_force_chart_img/top_spiderman.png")
+            ) # includes **kwargs
+nodes.append( Node(id="Captain_Marvel",
+                   size=25,
+                   shape="circularImage",
+                   image="http://marvel-force-chart.surge.sh/marvel_force_chart_img/top_captainmarvel.png")
+            )
+edges.append( Edge(source="Captain_Marvel",
+                   label="friend_of",
+                   target="Spiderman",
+                   # **kwargs
+                   )
+            )
+
+config = Config(width=750,
+                height=950,
+                directed=True,
+                physics=True,
+                hierarchical=False,
+                # **kwargs
+                )
+
+return_value = agraph(nodes=nodes,
+                      edges=edges,
+                      config=config)
+```
+
+#### Config Builder
+
+```python
+from streamlit_agraph.config import Config, ConfigBuilder
+
+# 1. Build the config (with sidebar to play with options) .
+config_builder = ConfigBuilder(nodes)
+config = config_builder.build()
+
+# 2. If your done, save the config to a file.
+config.save("config.json")
+
+# 3. Simple reload from json file (you can bump the builder at this point.)
+config = Config(from_json="config.json")
+```
+
+Formating the graph with hierachies is also possible via Hierarchical Option (see config):
+Group as you can see on the node colors too. Just pass the group attribute to the Node object.
+
+#### TripleStore
+
+You may also want to use the TripleStore (untested & incomplete - yet):
+HINT: Make sure to add only unique nodes and edges.
+
+```python
+# Currently not workin since update to agraph 2.0 - work in progress
+from rdflib import Graph
+from streamlit_agraph import TripleStore, agraph
+
+graph = Graph()
+graph.parse("http://www.w3.org/People/Berners-Lee/card")
+store = TripleStore()
+
+for subj, pred, obj in graph:
+store.add_triple(subj, pred, obj, "")
+
+agraph(list(store.getNodes()), list(store.getEdges()), config)
+```
+
+Also graph algos can dirctly supported via the networkx API (untested & incomplete - yet):
+
+```python
+from streamlit_agraph import GraphAlgos
+
+algos = GraphAlgos(store)
+algos.shortest_path("Spiderman", "Captain_Marvel")
+algos.density()
+```

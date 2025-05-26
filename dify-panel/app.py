@@ -10,6 +10,11 @@ from pathlib import Path
 
 import dotenv
 import streamlit as st
+from config import Pages
+from utils.ui_components import site_sidebar, action_bar, page_header, data_display, detail_dialog, show_detail_dialog
+import pandas as pd
+import json
+from utils.dsl_components import dsl_graph
 
 # 添加当前目录到Python路径
 current_dir = Path(__file__).parent
@@ -18,9 +23,13 @@ sys.path.append(str(current_dir))
 # 加载环境变量
 dotenv.load_dotenv()
 
-# 导入工具类
+# 导入工具类和模型
+from models import Site, create_tables
 from utils.dify_client import DifyClient
-from utils.ui_components import connection_form, page_header, success_message
+from utils.ui_components import connection_form, success_message
+
+# 创建数据库表（如果不存在）
+create_tables()
 
 # 设置页面配置
 st.set_page_config(
@@ -30,30 +39,46 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# 初始化会话状态变量
+if 'dialog_open' not in st.session_state:
+    st.session_state.dialog_open = False
 
-def try_auto_connect():
+def open_dialog():
+    """打开对话框"""
+    st.session_state.dialog_open = True
+
+def close_dialog():
+    """关闭对话框"""
+    st.session_state.dialog_open = False
+
+def test_callback(value):
+    """测试回调函数"""
+    st.session_state.selected_value = value
+    st.toast(f"选择的值: {value}")
+
+def show_detail_content(selected_row):
     """
-    尝试使用环境变量中的默认值自动连接到Dify平台
-
-    如果环境变量中存在必要的连接信息，且尚未连接，则尝试自动连接
-
-    Returns:
-        bool: 是否成功连接
+    显示选中行的详细信息（在对话框中使用）
+    
+    Args:
+        selected_row (DataFrame): 选中的行数据
     """
-    # 如果已经连接，不需要再次连接
-    if DifyClient.is_connected():
-        return True
-
-    # 获取环境变量中的默认值
-    default_base_url, default_email, default_password = (
-        DifyClient.get_default_connection_info()
-    )
-
-    # 如果环境变量中有完整的连接信息，尝试自动连接
-    if default_base_url and default_email and default_password:
-        return DifyClient.connect(default_base_url, default_email, default_password)
-
-    return False
+    if selected_row.empty:
+        st.info("未选择数据")
+        return
+        
+    # 显示所有列的信息
+    for col in selected_row.columns:
+        if col != "_id":  # 不显示内部ID字段
+            st.write(f"**{col}**: {selected_row[col].iloc[0]}")
+    
+    # 可以在这里添加更多操作按钮
+    st.divider()
+    if st.button("编辑", key="dialog_edit"):
+        st.write("编辑功能将在这里实现")
+    
+    if st.button("删除", key="dialog_delete"):
+        st.write("删除功能将在这里实现")
 
 
 def main():
@@ -61,27 +86,8 @@ def main():
     # 页面标题
     page_header("Dify管理面板", "通过此面板管理Dify平台上的应用、API密钥、标签和工具")
 
-    # 尝试自动连接
-    auto_connected = try_auto_connect()
-
-    # 侧边栏导航
-    with st.sidebar:
-        st.title("Dify管理面板")
-        st.divider()
-
-        # 显示连接状态
-        if DifyClient.is_connected():
-            st.success("已连接到Dify平台")
-            st.write(f"服务器: {st.session_state.dify_base_url}")
-            st.write(f"账号: {st.session_state.dify_email}")
-
-            if st.button("断开连接"):
-                DifyClient.disconnect()
-                st.rerun()
-        else:
-            st.warning("未连接到Dify平台")
-            st.info("请在右侧连接表单中输入Dify平台的连接信息")
-
+    site_sidebar()
+    
     # 主内容区域
     if not DifyClient.is_connected():
         # 显示连接表单
@@ -91,7 +97,7 @@ def main():
         # 如果尝试自动连接过但失败，显示错误信息
         if auto_connected is False:
             st.warning(
-                "尝试使用环境变量中的连接信息自动连接失败，请手动输入正确的连接信息。"
+                "尝试使用默认站点连接失败，请手动输入正确的连接信息。"
             )
 
         # 显示连接表单
@@ -135,9 +141,8 @@ def main():
                     - app_types.get("chat", 0)
                     - app_types.get("agent-chat", 0),
                 )
-
-            # 显示功能导航
-            st.divider()
+                
+            
             st.write("### 功能导航")
 
             # 创建三列导航区
@@ -148,31 +153,38 @@ def main():
                 st.write("创建、编辑、删除应用，管理应用的DSL配置")
                 if st.button("进入应用管理", key="nav_app"):
                     # 跳转到应用管理页面
-                    st.switch_page("pages/app_management.py")
+                    st.switch_page(Pages.APP_MANAGEMENT)
 
             with nav_col2:
                 st.subheader("API密钥管理")
                 st.write("管理应用的API密钥，创建新密钥或删除旧密钥")
                 if st.button("进入API密钥管理", key="nav_api"):
                     # 跳转到API密钥管理页面
-                    st.switch_page("pages/api_key_management.py")
+                    st.switch_page(Pages.API_KEY_MANAGEMENT)
 
             with nav_col3:
                 st.subheader("标签管理")
                 st.write("创建和管理标签，为应用添加或移除标签")
                 if st.button("进入标签管理", key="nav_tags"):
                     # 跳转到标签管理页面
-                    st.switch_page("pages/tag_management.py")
+                    st.switch_page(Pages.TAG_MANAGEMENT)
 
             # 第二行导航
-            nav_col4, nav_col5, _ = st.columns(3)
+            nav_col4, nav_col5, nav_col6 = st.columns(3)
 
             with nav_col4:
                 st.subheader("工具管理")
                 st.write("查看和管理工具提供者，更新工作流工具")
                 if st.button("进入工具管理", key="nav_tools"):
                     # 跳转到工具管理页面
-                    st.switch_page("pages/tool_management.py")
+                    st.switch_page(Pages.TOOL_MANAGEMENT)
+                    
+            with nav_col5:
+                st.subheader("站点管理")
+                st.write("管理和切换不同的Dify站点连接")
+                if st.button("进入站点管理", key="nav_sites"):
+                    # 跳转到站点管理页面
+                    st.switch_page(Pages.SITE_MANAGEMENT)
 
         except Exception as e:
             st.error(f"获取平台信息失败: {str(e)}")

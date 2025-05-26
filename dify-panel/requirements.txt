@@ -4,3 +4,5 @@ streamlit
 streamlit-extras
 tqdm
 pydify
+streamlit-modal
+streamlit-agraph

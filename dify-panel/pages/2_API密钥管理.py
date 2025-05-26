@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+from config import Pages
+from utils.ui_components import site_sidebar
 
 # 添加项目根目录到Python路径
 root_dir = Path(__file__).parent.parent
@@ -325,6 +327,8 @@ def perform_delete(app_id, api_key_id):
 
 def main():
     """主函数"""
+    site_sidebar()
+    
     # 检查连接状态
     if not DifyClient.is_connected():
         st.warning("未连接到Dify平台")
@@ -332,8 +336,9 @@ def main():
 
         # 返回主页按钮
         if st.button("返回主页"):
-            st.switch_page("app.py")
+            st.switch_page(Pages.HOME)
         return
+
 
     # 根据当前视图模式显示不同的内容
     if st.session_state.api_key_view_mode == "list":

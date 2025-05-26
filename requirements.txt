@@ -1,4 +1,4 @@
 requests>=2.25.0
 sseclient-py>=1.8.0
 streamlit>=1.24.0
-
+pyyaml>=6.0.0

@@ -11,10 +11,13 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+from config import Pages
+from utils.ui_components import site_sidebar
 
 # 添加项目根目录到Python路径
 root_dir = Path(__file__).parent.parent
 sys.path.append(str(root_dir))
+
 
 # 导入工具类
 from utils.dify_client import DifyClient
@@ -144,7 +147,7 @@ def view_provider_details():
         st.session_state.selected_provider is not None
         and not st.session_state.selected_provider.empty
     ):
-        provider_id = st.session_state.selected_provider.iloc[0]["_id"]
+        provider_id = st.session_state.selected_provider.iloc[0]["id"]
         provider = next(
             (p for p in get_tool_providers() if p["id"] == provider_id), None
         )
@@ -166,7 +169,7 @@ def view_workflow_tool():
         st.session_state.selected_workflow_app is not None
         and not st.session_state.selected_workflow_app.empty
     ):
-        app_id = st.session_state.selected_workflow_app.iloc[0]["_id"]
+        app_id = st.session_state.selected_workflow_app.iloc[0]["id"]
         st.session_state.tool_view_mode = "workflow_tool"
         st.session_state.current_workflow_app_id = app_id
         st.rerun()
@@ -178,7 +181,7 @@ def edit_workflow_tool():
         st.session_state.selected_workflow_app is not None
         and not st.session_state.selected_workflow_app.empty
     ):
-        app_id = st.session_state.selected_workflow_app.iloc[0]["_id"]
+        app_id = st.session_state.selected_workflow_app.iloc[0]["id"]
         st.session_state.tool_view_mode = "edit_workflow_tool"
         st.session_state.current_workflow_app_id = app_id
         st.rerun()
@@ -235,20 +238,8 @@ def show_tool_provider_list():
         p for p in providers if p.get("type", "unknown") in selected_types
     ]
 
-    # 定义表格列配置
-    columns = [
-        {"field": "name", "title": "名称"},
-        {"field": "type", "title": "类型"},
-        {"field": "icon", "title": "图标"},
-        {"field": "tool_count", "title": "工具数量"},
-    ]
-
-    # 处理工具数量
-    for provider in filtered_providers:
-        provider["tool_count"] = len(provider.get("tools", []))
-
     # 显示数据表格
-    selected_df = data_display(filtered_providers, columns, key="provider_table")
+    selected_df = data_display(filtered_providers, columns=None, key="provider_table")
 
     # 保存选中的行
     st.session_state.selected_provider = selected_df
@@ -290,20 +281,16 @@ def show_provider_details():
 
     # 提供者基本信息
     st.subheader("基本信息")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.write(f"**ID**: {provider['id']}")
-        st.write(f"**名称**: {provider['name']}")
-        st.write(f"**类型**: {provider['type']}")
-    with col2:
-        st.write(f"**图标**: {provider.get('icon', '无')}")
-        st.write(f"**提供工具数量**: {len(provider.get('tools', []))}")
-
-    # 提供者说明
-    if "description" in provider and provider["description"]:
-        st.subheader("说明")
-        st.write(provider["description"])
-
+    tabs = st.tabs(["Provider信息", "工具信息"])
+    with tabs[0]:
+        st.json(provider)
+    with tabs[1]:
+        if provider['type'] == 'workflow':
+            tool_info = DifyClient.get_connection().fetch_workflow_tool(workflow_tool_id=provider['id'])
+            st.json(tool_info)
+        else:
+            st.error("不支持的工具提供者类型")
+    
     # 显示工具列表
     tools = provider.get("tools", [])
     if tools:
@@ -359,7 +346,7 @@ def show_workflow_apps():
         st.divider()
         st.subheader("操作")
 
-        app_id = selected_df.iloc[0]["_id"]
+        app_id = selected_df.iloc[0]["id"]
         app = next((a for a in workflow_apps if a["id"] == app_id), None)
 
         if app:
@@ -463,22 +450,7 @@ def show_workflow_tool_details():
 
     # 工具基本信息
     st.subheader("基本信息")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.write(f"**应用ID**: {app['id']}")
-        st.write(f"**工具名称**: {tool_data.get('name', '未设置')}")
-        st.write(f"**工具标识**: {tool_data.get('qualified_name', '未设置')}")
-    with col2:
-        st.write(f"**应用名称**: {app['name']}")
-        st.write(f"**应用类型**: 工作流")
-        st.write(
-            f"**发布状态**: {'已发布' if app.get('published_as_tool', False) else '未发布'}"
-        )
-
-    # 工具详细信息
-    st.subheader("工具配置信息")
-    st.write(f"**描述**: {tool_data.get('description', '无描述')}")
-
+    st.json(tool_data)
     # 显示参数
     params = tool_data.get("parameters", [])
     if params:
@@ -612,16 +584,8 @@ def show_edit_workflow_tool():
 
 def main():
     """主函数"""
-    # 检查连接状态
-    if not DifyClient.is_connected():
-        st.warning("未连接到Dify平台")
-        st.info("请先在主页连接到Dify平台")
-
-        # 返回主页按钮
-        if st.button("返回主页"):
-            st.switch_page("app.py")
-        return
-
+    site_sidebar()
+    
     # 根据当前视图模式显示不同的内容
     if st.session_state.tool_view_mode == "list":
         show_tool_provider_list()

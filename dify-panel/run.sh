@@ -7,19 +7,10 @@ show_help() {
     echo "用法: ./run.sh [选项]"
     echo "选项:"
     echo "  -h, --help           显示此帮助信息"
-    echo "  -u, --url URL        设置Dify平台URL"
-    echo "  -e, --email EMAIL    设置登录邮箱"
-    echo "  -p, --password PWD   设置登录密码"
     echo "  --port PORT          设置Streamlit应用端口(默认8501)"
     echo
-    echo "也可以通过环境变量设置连接信息:"
-    echo "  DIFY_BASE_URL        Dify平台URL"
-    echo "  DIFY_EMAIL           登录邮箱"
-    echo "  DIFY_PASSWORD        登录密码"
-    echo
     echo "示例:"
-    echo "  ./run.sh -u http://example.com:11080 -e admin@example.com -p password"
-    echo "  DIFY_BASE_URL=http://example.com:11080 ./run.sh"
+    echo "  ./run.sh --port 8888"
 }
 
 # 默认端口
@@ -31,18 +22,6 @@ while [[ $# -gt 0 ]]; do
         -h|--help)
             show_help
             exit 0
-            ;;
-        -u|--url)
-            export DIFY_BASE_URL="$2"
-            shift 2
-            ;;
-        -e|--email)
-            export DIFY_EMAIL="$2"
-            shift 2
-            ;;
-        -p|--password)
-            export DIFY_PASSWORD="$2"
-            shift 2
             ;;
         --port)
             PORT="$2"
@@ -58,24 +37,6 @@ done
 
 # 显示当前配置
 echo "Dify管理面板启动配置:"
-if [ -n "$DIFY_BASE_URL" ]; then
-    echo "服务器: $DIFY_BASE_URL"
-else
-    echo "服务器: [未设置]"
-fi
-
-if [ -n "$DIFY_EMAIL" ]; then
-    echo "邮箱: $DIFY_EMAIL"
-else
-    echo "邮箱: [未设置]"
-fi
-
-if [ -n "$DIFY_PASSWORD" ]; then
-    echo "密码: [已设置]"
-else
-    echo "密码: [未设置]"
-fi
-
 echo "端口: $PORT"
 echo "正在启动应用..."
 

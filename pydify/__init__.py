@@ -11,7 +11,7 @@ from .chatflow import ChatflowClient, ChatflowEvent
 from .common import DifyBaseClient, DifyType
 from .text_generation import TextGenerationClient, TextGenerationEvent
 from .workflow import WorkflowClient, WorkflowEvent
-
+from .config import *
 
 def create_client(type: str, base_url: str, api_key: str) -> DifyBaseClient:
     if type == DifyType.Workflow:
@@ -28,7 +28,7 @@ def create_client(type: str, base_url: str, api_key: str) -> DifyBaseClient:
         raise ValueError(f"Invalid client type: {type}")
 
 
-__version__ = "2.3.0"
+__version__ = VERSION
 __all__ = [
     "WorkflowClient",
     "ChatbotClient",
