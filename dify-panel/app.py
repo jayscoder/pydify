@@ -4,17 +4,24 @@ Dify管理面板 - 主页
 提供Dify平台连接管理和功能导航
 """
 
+import json
 import os
 import sys
 from pathlib import Path
 
 import dotenv
+import pandas as pd
 import streamlit as st
 from config import Pages
-from utils.ui_components import site_sidebar, action_bar, page_header, data_display, detail_dialog, show_detail_dialog
-import pandas as pd
-import json
 from utils.dsl_components import dsl_graph
+from utils.ui_components import (
+    action_bar,
+    data_display,
+    detail_dialog,
+    page_header,
+    show_detail_dialog,
+    site_sidebar,
+)
 
 # 添加当前目录到Python路径
 current_dir = Path(__file__).parent
@@ -40,43 +47,47 @@ st.set_page_config(
 )
 
 # 初始化会话状态变量
-if 'dialog_open' not in st.session_state:
+if "dialog_open" not in st.session_state:
     st.session_state.dialog_open = False
+
 
 def open_dialog():
     """打开对话框"""
     st.session_state.dialog_open = True
 
+
 def close_dialog():
     """关闭对话框"""
     st.session_state.dialog_open = False
+
 
 def test_callback(value):
     """测试回调函数"""
     st.session_state.selected_value = value
     st.toast(f"选择的值: {value}")
 
+
 def show_detail_content(selected_row):
     """
     显示选中行的详细信息（在对话框中使用）
-    
+
     Args:
         selected_row (DataFrame): 选中的行数据
     """
     if selected_row.empty:
         st.info("未选择数据")
         return
-        
+
     # 显示所有列的信息
     for col in selected_row.columns:
         if col != "_id":  # 不显示内部ID字段
             st.write(f"**{col}**: {selected_row[col].iloc[0]}")
-    
+
     # 可以在这里添加更多操作按钮
     st.divider()
     if st.button("编辑", key="dialog_edit"):
         st.write("编辑功能将在这里实现")
-    
+
     if st.button("删除", key="dialog_delete"):
         st.write("删除功能将在这里实现")
 
@@ -87,7 +98,7 @@ def main():
     page_header("Dify管理面板", "通过此面板管理Dify平台上的应用、API密钥、标签和工具")
 
     site_sidebar()
-    
+
     # 主内容区域
     if not DifyClient.is_connected():
         # 显示连接表单
@@ -96,9 +107,7 @@ def main():
 
         # 如果尝试自动连接过但失败，显示错误信息
         if auto_connected is False:
-            st.warning(
-                "尝试使用默认站点连接失败，请手动输入正确的连接信息。"
-            )
+            st.warning("尝试使用默认站点连接失败，请手动输入正确的连接信息。")
 
         # 显示连接表单
         base_url, email, password, submit = connection_form()
@@ -141,8 +150,7 @@ def main():
                     - app_types.get("chat", 0)
                     - app_types.get("agent-chat", 0),
                 )
-                
-            
+
             st.write("### 功能导航")
 
             # 创建三列导航区
@@ -178,7 +186,7 @@ def main():
                 if st.button("进入工具管理", key="nav_tools"):
                     # 跳转到工具管理页面
                     st.switch_page(Pages.TOOL_MANAGEMENT)
-                    
+
             with nav_col5:
                 st.subheader("站点管理")
                 st.write("管理和切换不同的Dify站点连接")

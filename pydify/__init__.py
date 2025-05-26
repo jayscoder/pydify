@@ -9,9 +9,10 @@ from .agent import AgentClient, AgentEvent
 from .chatbot import ChatbotClient, ChatbotEvent
 from .chatflow import ChatflowClient, ChatflowEvent
 from .common import DifyBaseClient, DifyType
+from .config import *
 from .text_generation import TextGenerationClient, TextGenerationEvent
 from .workflow import WorkflowClient, WorkflowEvent
-from .config import *
+
 
 def create_client(type: str, base_url: str, api_key: str) -> DifyBaseClient:
     if type == DifyType.Workflow:

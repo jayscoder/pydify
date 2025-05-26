@@ -4,11 +4,14 @@ Pydify - Dify 网站API交互
 此模块提供与Dify网站API交互的工具。
 """
 
-from typing import List, Union, Callable
 import time
+from typing import Callable, List, Union
+
 import requests
 import yaml
+
 from .config import *
+
 
 class DifySite:
     """
@@ -190,7 +193,7 @@ class DifySite:
         import_url = f"{self.base_url}/console/api/apps/imports"
         if isinstance(dsl, dict):
             dsl = yaml.dump(dsl)
-        
+
         payload = {"mode": "yaml-content", "yaml_content": dsl}
 
         if app_id:
@@ -204,7 +207,14 @@ class DifySite:
             raise Exception(f"导入DSL失败: {response.text}")
         return response.json()
 
-    def create_app(self, name, description, mode, tag_ids: Union[List[str], str] = None, dsl: Union[str, dict] = None):
+    def create_app(
+        self,
+        name,
+        description,
+        mode,
+        tag_ids: Union[List[str], str] = None,
+        dsl: Union[str, dict] = None,
+    ):
         """
         创建新的Dify应用
 
@@ -249,12 +259,12 @@ class DifySite:
         )
         if response.status_code != 201:
             raise Exception(f"创建应用失败: {response.text}")
-        
+
         app_info = response.json()
-        app_id = app_info['id']
+        app_id = app_info["id"]
         if tag_ids and len(tag_ids) > 0:
             self.bind_tag_to_app(app_id, tag_ids=tag_ids)
-        
+
         if dsl:
             self.import_app_dsl(dsl, app_id=app_id)
         return app_info
@@ -386,7 +396,7 @@ class DifySite:
         """
         url = f"{self.base_url}/app/{app_id}/{app_mode}"
         return url
-    
+
     def delete_app(self, app_id):
         """
         删除指定应用
@@ -664,8 +674,7 @@ class DifySite:
         if response.status_code != 200:
             raise Exception(f"发布应用失败: {response.text}")
         return response.json()
-    
-    
+
     def create_workflow_tool(
         self,
         name: str,
@@ -683,12 +692,12 @@ class DifySite:
         create_url = f"{self.base_url}/console/api/workspaces/current/tool-provider/workflow/create"
         payload = {
             "name": name,
-            "description": description if description is not None else '',
+            "description": description if description is not None else "",
             "label": label,
             "icon": DEFAULT_ICON if icon is None else icon,
             "parameters": parameters if parameters is not None else [],
             "labels": labels if labels is not None else [],
-            "privacy_policy": privacy_policy if privacy_policy is not None else '',
+            "privacy_policy": privacy_policy if privacy_policy is not None else "",
             "workflow_app_id": workflow_app_id,
         }
         response = requests.post(
@@ -698,8 +707,10 @@ class DifySite:
         )
         if response.status_code != 200:
             raise Exception(f"创建工具失败: {response.text}")
-        return self.fetch_workflow_tool(workflow_app_id=workflow_app_id, workflow_tool_id=None)
-    
+        return self.fetch_workflow_tool(
+            workflow_app_id=workflow_app_id, workflow_tool_id=None
+        )
+
     def update_workflow_tool(
         self,
         name: str = None,
@@ -726,31 +737,42 @@ class DifySite:
             labels (list): 工具标签列表
             privacy_policy (str): 隐私政策
             upsert (bool): 是否自动创建工具
-        
+
         如果某个参数是None，则不更新该参数
         """
         try:
-            old_tool = self.fetch_workflow_tool(workflow_app_id=workflow_app_id, workflow_tool_id=workflow_tool_id)
+            old_tool = self.fetch_workflow_tool(
+                workflow_app_id=workflow_app_id, workflow_tool_id=workflow_tool_id
+            )
         except Exception as e:
             if upsert:
-                return self.create_workflow_tool(name=name, label=label, workflow_app_id=workflow_app_id, description=description, parameters=parameters, labels=labels, privacy_policy=privacy_policy, icon=icon)
+                return self.create_workflow_tool(
+                    name=name,
+                    label=label,
+                    workflow_app_id=workflow_app_id,
+                    description=description,
+                    parameters=parameters,
+                    labels=labels,
+                    privacy_policy=privacy_policy,
+                    icon=icon,
+                )
             else:
                 raise Exception(f"工具不存在: {e}")
-        
+
         name = name if name is not None else old_tool["name"]
         description = (
             description if description is not None else old_tool["description"]
         )
         label = label if label is not None else old_tool["label"]
         parameters = parameters if parameters is not None else old_tool["parameters"]
-        labels = labels if labels is not None else old_tool['tool']["labels"]
+        labels = labels if labels is not None else old_tool["tool"]["labels"]
         privacy_policy = (
             privacy_policy if privacy_policy is not None else old_tool["privacy_policy"]
         )
         icon = icon if icon is not None else old_tool["icon"]
         workflow_tool_id = old_tool["workflow_tool_id"]
         workflow_app_id = old_tool["workflow_app_id"]
-        
+
         publish_url = f"{self.base_url}/console/api/workspaces/current/tool-provider/workflow/update"
         payload = {
             "name": name,
@@ -769,10 +791,14 @@ class DifySite:
         )
         if response.status_code != 200:
             raise Exception(f"发布工具失败: {response.text}")
-        
-        return self.fetch_workflow_tool(workflow_app_id=workflow_app_id, workflow_tool_id=workflow_tool_id)
 
-    def fetch_workflow_tool(self, workflow_app_id: str='', workflow_tool_id: str=''):
+        return self.fetch_workflow_tool(
+            workflow_app_id=workflow_app_id, workflow_tool_id=workflow_tool_id
+        )
+
+    def fetch_workflow_tool(
+        self, workflow_app_id: str = "", workflow_tool_id: str = ""
+    ):
         """
         获取指定工作流应用的工具详情信息
 
@@ -813,7 +839,9 @@ class DifySite:
             url, headers={"Authorization": f"Bearer {self.access_token}"}
         )
         if response.status_code != 200:
-            raise Exception(f"获取工具失败: {response.text} workflow_tool_id: {workflow_tool_id} workflow_app_id: {workflow_app_id}")
+            raise Exception(
+                f"获取工具失败: {response.text} workflow_tool_id: {workflow_tool_id} workflow_app_id: {workflow_app_id}"
+            )
         return response.json()
 
     def delete_workflow_tool(self, workflow_tool_id: str):
@@ -822,13 +850,18 @@ class DifySite:
         """
         delete_url = f"{self.base_url}/console/api/workspaces/current/tool-provider/workflow/delete"
         payload = {"workflow_tool_id": workflow_tool_id}
-        response = requests.post(delete_url, headers={"Authorization": f"Bearer {self.access_token}"}, json=payload)    
+        response = requests.post(
+            delete_url,
+            headers={"Authorization": f"Bearer {self.access_token}"},
+            json=payload,
+        )
         if response.status_code != 200:
             raise Exception(f"删除工具失败: {response.text}")
         return response.json()
-    
-        
-    def export_app_json(self, app_id: str, on_progress: Callable[[str, int], None] = None):
+
+    def export_app_json(
+        self, app_id: str, on_progress: Callable[[str, int], None] = None
+    ):
         """
         导出应用的JSON数据
 
@@ -841,7 +874,7 @@ class DifySite:
         """
         dsl_dict = {}
         tool_dict = {}
-        
+
         def do_fetch(app_id: str, depth: int = 0):
             if app_id in dsl_dict or depth > 50:
                 # 防止无限递归
@@ -850,28 +883,32 @@ class DifySite:
             dsl = self.fetch_app_dsl(app_id)
             dsl = yaml.safe_load(dsl)
             dsl_dict[app_id] = dsl
-            for node in dsl['workflow']['graph']['nodes']:
-                if node['data']['type'] == 'tool':
-                    tool_id = node['data']['provider_id']
+            for node in dsl["workflow"]["graph"]["nodes"]:
+                if node["data"]["type"] == "tool":
+                    tool_id = node["data"]["provider_id"]
                     tool = self.fetch_workflow_tool(workflow_tool_id=tool_id)
                     tool_dict[tool_id] = tool
-                    tool_workflow_app_id = tool['workflow_app_id']
+                    tool_workflow_app_id = tool["workflow_app_id"]
                     if on_progress:
-                        on_progress(tool_workflow_app_id, len(tool_dict) + len(dsl_dict))
+                        on_progress(
+                            tool_workflow_app_id, len(tool_dict) + len(dsl_dict)
+                        )
                     time.sleep(0.05)
                     do_fetch(tool_workflow_app_id, depth + 1)
-        
+
         do_fetch(app_id)
-        
+
         return {
-            'version': VERSION,
-            'id': app_id,
-            'name': dsl_dict[app_id]['app']['name'],
-            'dsl': dsl_dict,
-            'tool': tool_dict
+            "version": VERSION,
+            "id": app_id,
+            "name": dsl_dict[app_id]["app"]["name"],
+            "dsl": dsl_dict,
+            "tool": tool_dict,
         }
-    
-    def import_app_json(self, json_data: dict, prefix: str, suffix: str, tag_ids: list[str]):
+
+    def import_app_json(
+        self, json_data: dict, prefix: str, suffix: str, tag_ids: list[str]
+    ):
         """
         导入JSON数据到Dify
 
@@ -881,7 +918,7 @@ class DifySite:
             suffix (str): 后缀
             tag_ids (list[str]): 标签ID列表
             override (bool, optional): 是否覆盖已存在的应用. Defaults to False.
-        
+
         Raises:
             Exception: 导入的JSON数据中缺少dsl
             Exception: 导入的JSON数据中缺少tool
@@ -889,89 +926,90 @@ class DifySite:
             Exception: 应用名称已存在
         """
         # 获取client中所有的app
-        if 'dsl' not in json_data:
-            raise Exception('JSON数据中缺少dsl')
-        if 'tool' not in json_data:
-            raise Exception('JSON数据中缺少tool')
-        
+        if "dsl" not in json_data:
+            raise Exception("JSON数据中缺少dsl")
+        if "tool" not in json_data:
+            raise Exception("JSON数据中缺少tool")
+
         exist_apps = self.fetch_all_apps()
-        exist_apps_map = {app['name']: app['id'] for app in exist_apps}
+        exist_apps_map = {app["name"]: app["id"] for app in exist_apps}
         exist_tool_providers = self.fetch_tool_providers()
-        exist_tool_providers_map = {provider['name']: provider for provider in exist_tool_providers}
-        
+        exist_tool_providers_map = {
+            provider["name"]: provider for provider in exist_tool_providers
+        }
+
         # 修改所有tool的名称
         create_tool_payloads = {}
-        for tool in json_data['tool'].values():
-            tool['name'] = prefix + tool['name'] + suffix
-            tool['label'] = prefix + tool['label'] + suffix
-            if tool['name'] in exist_tool_providers_map:
+        for tool in json_data["tool"].values():
+            tool["name"] = prefix + tool["name"] + suffix
+            tool["label"] = prefix + tool["label"] + suffix
+            if tool["name"] in exist_tool_providers_map:
                 raise Exception(f'工具 {tool["name"]} 已存在')
-            create_tool_payloads[tool['workflow_app_id']] = tool
+            create_tool_payloads[tool["workflow_app_id"]] = tool
 
         # 修改所有app的名称
         create_app_payloads = {}
-        
-        for app_id, dsl in json_data['dsl'].items():
-            new_name = prefix + dsl['app']['name'] + suffix
+
+        for app_id, dsl in json_data["dsl"].items():
+            new_name = prefix + dsl["app"]["name"] + suffix
             if new_name in exist_apps_map:
-                raise Exception(f'应用 {new_name} 已存在')
-            dsl['app']['name'] = new_name
+                raise Exception(f"应用 {new_name} 已存在")
+            dsl["app"]["name"] = new_name
             create_app_payloads[new_name] = {
-                'name': new_name,
-                'description': dsl['app']['description'],
-                'mode': dsl['app']['mode'],
-                'tag_ids': tag_ids,
-                'dsl': dsl,
-                'tool': create_tool_payloads.get(app_id, None)
+                "name": new_name,
+                "description": dsl["app"]["description"],
+                "mode": dsl["app"]["mode"],
+                "tag_ids": tag_ids,
+                "dsl": dsl,
+                "tool": create_tool_payloads.get(app_id, None),
             }
-        
-        old_tool_mapping = {} # 老的tool_id -> 新的tool
-        
+
+        old_tool_mapping = {}  # 老的tool_id -> 新的tool
+
         for payload in create_app_payloads.values():
-            payload['id'] = self.create_app(
-                name=payload['name'],
-                description=payload['description'],
-                mode=payload['mode'],
-                tag_ids=payload['tag_ids'],
-                dsl=payload['dsl'],
-            )['id']
-            
-            if payload['tool']:
-                self.publish_workflow_app(payload['id'])
+            payload["id"] = self.create_app(
+                name=payload["name"],
+                description=payload["description"],
+                mode=payload["mode"],
+                tag_ids=payload["tag_ids"],
+                dsl=payload["dsl"],
+            )["id"]
+
+            if payload["tool"]:
+                self.publish_workflow_app(payload["id"])
                 tool = self.create_workflow_tool(
-                    name=payload['tool']['name'],
-                    label=payload['tool']['label'],
-                    workflow_app_id=payload['id'],
-                    description=payload['tool']['description'],
-                    parameters=payload['tool'].get('parameters', None),
-                    labels=payload['tool']['tool'].get('labels', None),
-                    privacy_policy=payload['tool'].get('privacy_policy', None),
-                    icon=payload['tool'].get('icon', None),
+                    name=payload["tool"]["name"],
+                    label=payload["tool"]["label"],
+                    workflow_app_id=payload["id"],
+                    description=payload["tool"]["description"],
+                    parameters=payload["tool"].get("parameters", None),
+                    labels=payload["tool"]["tool"].get("labels", None),
+                    privacy_policy=payload["tool"].get("privacy_policy", None),
+                    icon=payload["tool"].get("icon", None),
                 )
-                old_tool_mapping[payload['tool']['workflow_tool_id']] = tool
-                payload['tool'] = tool
-        
+                old_tool_mapping[payload["tool"]["workflow_tool_id"]] = tool
+                payload["tool"] = tool
+
         # 更新所有的dsl中引用的provider_id为新的tool_id
         for payload in create_app_payloads.values():
-            dsl = payload['dsl']
-            for node in dsl['workflow']['graph']['nodes']:
-                if node['data']['type'] == 'tool':
-                    new_tool = old_tool_mapping[node['data']['provider_id']]
-                    node['data']['provider_id'] = new_tool['workflow_tool_id']
-                    node['data']['provider_name'] = new_tool['name']
-                    node['data']['tool_label'] = new_tool['label']
-                    node['data']['tool_name'] = new_tool['name']
-            
+            dsl = payload["dsl"]
+            for node in dsl["workflow"]["graph"]["nodes"]:
+                if node["data"]["type"] == "tool":
+                    new_tool = old_tool_mapping[node["data"]["provider_id"]]
+                    node["data"]["provider_id"] = new_tool["workflow_tool_id"]
+                    node["data"]["provider_name"] = new_tool["name"]
+                    node["data"]["tool_label"] = new_tool["label"]
+                    node["data"]["tool_name"] = new_tool["name"]
+
             # 更新dsl
-            self.import_app_dsl(dsl=dsl, app_id=payload['id'])
+            self.import_app_dsl(dsl=dsl, app_id=payload["id"])
             # 发布
-            self.publish_workflow_app(payload['id'])
+            self.publish_workflow_app(payload["id"])
             # 重新更新工具
-            if payload['tool']:
+            if payload["tool"]:
                 self.update_workflow_tool(
-                    name=payload['tool']['name'],
-                    label=payload['tool']['label'],
-                    workflow_app_id=payload['id'],
+                    name=payload["tool"]["name"],
+                    label=payload["tool"]["label"],
+                    workflow_app_id=payload["id"],
                     upsert=True,
                 )
-        

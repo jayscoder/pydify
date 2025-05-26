@@ -47,10 +47,12 @@ def fetch_sites():
         return []
 
 
-def save_site(name, base_url, email, password, description="", is_default=False, site_id=None):
+def save_site(
+    name, base_url, email, password, description="", is_default=False, site_id=None
+):
     """
     保存站点信息（新增或更新）
-    
+
     Args:
         name: 站点名称
         base_url: 站点URL
@@ -59,7 +61,7 @@ def save_site(name, base_url, email, password, description="", is_default=False,
         description: 站点描述
         is_default: 是否为默认站点
         site_id: 站点ID（更新时使用）
-    
+
     Returns:
         bool: 是否保存成功
     """
@@ -68,7 +70,7 @@ def save_site(name, base_url, email, password, description="", is_default=False,
             # 如果设置为默认站点，先将所有站点的is_default设为False
             if is_default:
                 Site.update(is_default=False).execute()
-            
+
             if site_id:  # 更新现有站点
                 site = Site.get_by_id(site_id)
                 site.name = name
@@ -96,16 +98,16 @@ def save_site(name, base_url, email, password, description="", is_default=False,
 def delete_site(site_id):
     """
     删除站点
-    
+
     Args:
         site_id: 要删除的站点ID
-        
+
     Returns:
         bool: 是否删除成功
     """
     try:
         site = Site.get_by_id(site_id)
-        
+
         # 如果删除的是默认站点，需要设置另一个站点为默认
         if site.is_default:
             # 查找是否有其他站点可以设为默认
@@ -115,7 +117,7 @@ def delete_site(site_id):
                 other_site = other_sites.get()
                 other_site.is_default = True
                 other_site.save()
-        
+
         # 删除站点
         site.delete_instance()
         return True
@@ -127,10 +129,10 @@ def delete_site(site_id):
 def set_default_site(site_id):
     """
     设置默认站点
-    
+
     Args:
         site_id: 要设为默认的站点ID
-        
+
     Returns:
         bool: 是否设置成功
     """
@@ -138,7 +140,7 @@ def set_default_site(site_id):
         with db.atomic():
             # 先将所有站点的is_default设为False
             Site.update(is_default=False).execute()
-            
+
             # 将指定站点设为默认
             site = Site.get_by_id(site_id)
             site.is_default = True
@@ -152,22 +154,25 @@ def set_default_site(site_id):
 def connect_site(site_id):
     """
     连接到指定站点
-    
+
     Args:
         site_id: 要连接的站点ID
-        
+
     Returns:
         bool: 是否连接成功
     """
     try:
         site = Site.get_by_id(site_id)
         with st.spinner(f"正在连接到站点 {site.name}..."):
-            if DifyClient.connect(site.base_url, site.email, site.password, site.id, site.name):
+            if DifyClient.connect(
+                site.base_url, site.email, site.password, site.id, site.name
+            ):
                 success_message(f"成功连接到站点: {site.name}")
                 return True
     except Exception as e:
         st.error(f"连接站点失败: {str(e)}")
     return False
+
 
 @st.dialog("站点", width="large")
 def show_site_form_dialog(site_id=None):
@@ -176,10 +181,11 @@ def show_site_form_dialog(site_id=None):
     """
     show_site_form(site_id)
 
+
 def show_site_form(site_id=None):
     """
     显示站点表单（新增或编辑）
-    
+
     Args:
         site_id: 要编辑的站点ID，为None时表示新增
     """
@@ -192,7 +198,7 @@ def show_site_form(site_id=None):
         "description": "",
         "is_default": False,
     }
-    
+
     if site_id:
         try:
             site = Site.get_by_id(site_id)
@@ -207,50 +213,50 @@ def show_site_form(site_id=None):
         except Exception as e:
             st.error(f"获取站点信息失败: {str(e)}")
             return
-    
+
     # 显示表单
     with st.form(key="site_form"):
-        name = st.text_input("站点名称", value=site_data["name"], placeholder="例如: 生产环境")
-        base_url = st.text_input(
-            "站点URL", 
-            value=site_data["base_url"], 
-            placeholder="例如: http://example.com:11080"
+        name = st.text_input(
+            "站点名称", value=site_data["name"], placeholder="例如: 生产环境"
         )
-        
+        base_url = st.text_input(
+            "站点URL",
+            value=site_data["base_url"],
+            placeholder="例如: http://example.com:11080",
+        )
+
         # 分两列显示邮箱和密码
         col1, col2 = st.columns(2)
         with col1:
             email = st.text_input(
-                "登录邮箱", 
-                value=site_data["email"], 
-                placeholder="例如: admin@example.com"
+                "登录邮箱",
+                value=site_data["email"],
+                placeholder="例如: admin@example.com",
             )
         with col2:
             password = st.text_input(
-                "登录密码", 
-                value=site_data["password"], 
-                type="password"
+                "登录密码", value=site_data["password"], type="password"
             )
-        
+
         description = st.text_area(
-            "站点描述(可选)", 
-            value=site_data["description"], 
-            placeholder="输入站点的描述信息"
+            "站点描述(可选)",
+            value=site_data["description"],
+            placeholder="输入站点的描述信息",
         )
-        
+
         is_default = st.checkbox(
-            "设为默认站点", 
+            "设为默认站点",
             value=site_data["is_default"],
-            help="默认站点将在启动时自动连接"
+            help="默认站点将在启动时自动连接",
         )
-        
+
         # 测试连接和保存按钮
         col1, col2, col3 = st.columns(3)
         with col1:
             test_connection = st.form_submit_button("测试连接")
         with col2:
             submit = st.form_submit_button("保存")
-            
+
         with col3:
             if site_id:
                 delete = st.form_submit_button("删除")
@@ -258,7 +264,7 @@ def show_site_form(site_id=None):
                     if delete_site(site_id):
                         st.success("站点删除成功！")
                         st.rerun()
-        
+
         # 处理测试连接请求
         if test_connection and base_url and email and password:
             with st.spinner("正在测试连接..."):
@@ -267,7 +273,7 @@ def show_site_form(site_id=None):
                     st.success("连接成功！")
                 else:
                     st.error("连接失败，请检查连接信息")
-        
+
         # 处理保存请求
         if submit:
             if not name or not base_url or not email or not password:
@@ -277,16 +283,17 @@ def show_site_form(site_id=None):
                     name, base_url, email, password, description, is_default, site_id
                 ):
                     st.success("站点保存成功！")
-                    st.rerun()  
-        
+                    st.rerun()
+
+
 def main():
     """主函数"""
     # 页面标题
     page_header("Dify站点管理", "管理和切换不同的Dify站点连接")
-    
+
     # 获取站点列表
     sites = fetch_sites()
-    
+
     # 操作按钮区域
     with st.container():
         actions = [
@@ -297,9 +304,9 @@ def main():
                 "on_click": lambda: show_site_form_dialog(),
             }
         ]
-        
+
         action_bar(actions)
-    
+
     # 站点表格展示 - 不使用on_select参数，避免嵌套对话框
     selected_row = data_display(
         sites,
@@ -313,7 +320,7 @@ def main():
         ],
         key="sites_table",
     )
-    
+
     # 如果有选中行，显示详情对话框
     if not selected_row.empty:
         site_id = selected_row.iloc[0]["id"]
@@ -321,4 +328,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main() 
+    main()

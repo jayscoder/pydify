@@ -1,5 +1,6 @@
 VERSION = "2.4.0"
 
+
 # Dify应用模式的枚举类，用于创建应用时指定应用类型
 class DifyAppMode:
     """
@@ -12,7 +13,9 @@ class DifyAppMode:
     ADVANCED_CHAT = "advanced-chat"  # Chatflow - 高级聊天流
     WORKFLOW = "workflow"  # 工作流应用
 
+
 DEFAULT_ICON = {"content": "🤖", "background": "#FFEAD5"}
+
 
 class DifyToolParameterFormType:
     """
@@ -21,4 +24,3 @@ class DifyToolParameterFormType:
 
     FORM = "form"  # 表单类型
     LLM = "llm"  # LLM类型
-

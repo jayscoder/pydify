@@ -285,12 +285,14 @@ def show_provider_details():
     with tabs[0]:
         st.json(provider)
     with tabs[1]:
-        if provider['type'] == 'workflow':
-            tool_info = DifyClient.get_connection().fetch_workflow_tool(workflow_tool_id=provider['id'])
+        if provider["type"] == "workflow":
+            tool_info = DifyClient.get_connection().fetch_workflow_tool(
+                workflow_tool_id=provider["id"]
+            )
             st.json(tool_info)
         else:
             st.error("不支持的工具提供者类型")
-    
+
     # 显示工具列表
     tools = provider.get("tools", [])
     if tools:
@@ -585,7 +587,7 @@ def show_edit_workflow_tool():
 def main():
     """主函数"""
     site_sidebar()
-    
+
     # 根据当前视图模式显示不同的内容
     if st.session_state.tool_view_mode == "list":
         show_tool_provider_list()

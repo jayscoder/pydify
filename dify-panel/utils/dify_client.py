@@ -15,7 +15,7 @@ root_dir = Path(__file__).parent.parent.parent
 sys.path.append(str(root_dir))
 
 # 导入DifySite类
-from pydify.site import DifySite, DifyAppMode
+from pydify.site import DifyAppMode, DifySite
 
 # 尝试导入模型，如果失败则跳过（初始化阶段可能无法导入）
 try:
@@ -81,7 +81,7 @@ class DifyClient:
             st.session_state.dify_password = password
             st.session_state.dify_connected = True
             st.session_state.dify_client = client
-            
+
             # 如果提供了站点ID，保存当前活跃站点信息
             if site_id:
                 st.session_state.active_site_id = site_id
@@ -96,7 +96,6 @@ class DifyClient:
             st.session_state.active_site_name = ""
             return False
 
-    
     @staticmethod
     def test_connect(base_url, email, password):
         """
@@ -108,7 +107,7 @@ class DifyClient:
         except Exception as e:
             st.error(f"连接失败: {str(e)}")
             return False
-    
+
     @staticmethod
     def is_connected():
         """
@@ -118,19 +117,19 @@ class DifyClient:
             bool: 是否已连接
         """
         return st.session_state.get("dify_connected", False)
-    
+
     @staticmethod
     def get_active_site():
         """
         获取当前活跃站点信息
-        
+
         Returns:
             dict: 包含站点ID和名称的字典, 如果没有活跃站点则返回None
         """
         if st.session_state.get("active_site_id"):
             return {
                 "id": st.session_state.active_site_id,
-                "name": st.session_state.active_site_name
+                "name": st.session_state.active_site_name,
             }
         return None
 
@@ -138,7 +137,7 @@ class DifyClient:
     def get_default_connection_info():
         """
         获取默认的连接信息，优先从站点数据库中读取默认站点，如果没有则从环境变量读取
-        
+
         Returns:
             tuple: (base_url, email, password) 默认的连接信息
         """
@@ -147,11 +146,15 @@ class DifyClient:
             try:
                 default_site = Site.select().where(Site.is_default == True).first()
                 if default_site:
-                    return default_site.base_url, default_site.email, default_site.password
+                    return (
+                        default_site.base_url,
+                        default_site.email,
+                        default_site.password,
+                    )
             except Exception:
                 # 数据库操作失败，忽略错误继续使用环境变量
                 pass
-                
+
         # 从环境变量中读取
         default_base_url = os.environ.get("DIFY_BASE_URL", "")
         default_email = os.environ.get("DIFY_EMAIL", "")
@@ -172,18 +175,18 @@ def try_auto_connect():
     # 如果已经连接，不需要再次连接
     if DifyClient.is_connected():
         return True
-    
+
     # 尝试从数据库中查找默认站点
     try:
         default_site = Site.select().where(Site.is_default == True).first()
         if default_site:
             # 使用默认站点信息连接
             return DifyClient.connect(
-                default_site.base_url, 
-                default_site.email, 
+                default_site.base_url,
+                default_site.email,
                 default_site.password,
                 default_site.id,
-                default_site.name
+                default_site.name,
             )
     except Exception:
         # 数据库操作失败，继续使用环境变量
